@@ -1,0 +1,6 @@
+{
+  "name": "CaptionX Free Studio",
+  "description": "Free online automatic video caption generator, animated subtitle studio, and real-time subtitle converter with watermark-free video and SRT exports.",
+  "requestFramePermissions": ["microphone", "camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

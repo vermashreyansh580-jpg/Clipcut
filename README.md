@@ -1,11 +1,9 @@
-<div align="center">
+# CaptionX Free Studio
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+Free online automatic video caption generator, animated subtitle studio, silence remover, and real-time subtitle converter powered by Groq Whisper (`whisper-large-v3-turbo` / `whisper-large-v3`) and Groq LLMs (`openai/gpt-oss-120b` / `qwen/qwen3.8-27b`) with **100% watermark-free** video and subtitle exports.
 
-  <h1>Built with AI Studio</h2>
+## Vercel Deployment
 
-  <p>The fastest path from prompt to production with Gemini.</p>
-
-  <a href="https://aistudio.google.com/apps">Start building</a>
-
-</div>
+1. Import this repository into [Vercel](https://vercel.com/new).
+2. Optional: Add `GROQ_API_KEY` in Vercel Environment Variables (already configured with a default fallback in the server routes).
+3. Click **Deploy**.
