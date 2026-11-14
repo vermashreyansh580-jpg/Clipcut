@@ -1300,7 +1300,7 @@ export default function CaptionStudioApp() {
                               onClick={() =>
                                 setStyleConfig((s) => ({
                                   ...s,
-                                  depthXrayOutline: !s.depthXrayOutline,
+                                  depthXrayOutline: s.depthXrayOutline ? 0 : 0.28,
                                 }))
                               }
                               className={`px-2 py-0.5 rounded text-[10px] font-bold ${
