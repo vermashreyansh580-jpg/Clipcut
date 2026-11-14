@@ -15,6 +15,20 @@ export interface CaptionCue {
 }
 
 export type CaptionStylePreset =
+  | 'ae-behind-building'
+  | 'ae-skyline-rise'
+  | 'ae-neon-saber'
+  | 'ae-3d-extrude'
+  | 'ae-rgb-glitch'
+  | 'ae-whip-slide'
+  | 'ae-bass-stomp'
+  | 'ae-gold-luxury'
+  | 'ae-fire-inferno'
+  | 'ae-hollow-outline'
+  | 'ae-typewriter-hud'
+  | 'ae-sine-wave'
+  | 'ae-glass-capsule'
+  | 'ae-anamorphic-film'
   | 'hormozi-pop'
   | 'word-highlight'
   | 'boxed-pill'
@@ -22,9 +36,45 @@ export type CaptionStylePreset =
   | 'bounce-bold'
   | 'editorial-clean';
 
+export type CaptionAnimationStyle =
+  | 'pop'
+  | 'whip-slide'
+  | 'typewriter'
+  | 'wave'
+  | 'stomp'
+  | 'glitch'
+  | 'cinematic-pan'
+  | 'karaoke'
+  | 'flicker';
+
+export type CaptionCrossDirection =
+  | 'none'
+  | 'left-to-right'
+  | 'right-to-left'
+  | 'rise-up'
+  | 'slow-zoom';
+
+export type CaptionDepthMode =
+  | 'auto-building-sky'
+  | 'dark-silhouette'
+  | 'bright-subject'
+  | 'center-portrait';
+
+export type CaptionFontFamily =
+  | 'Plus Jakarta Sans'
+  | 'Bebas Neue'
+  | 'Anton'
+  | 'Montserrat'
+  | 'Cinzel'
+  | 'Orbitron'
+  | 'Oswald'
+  | 'Fraunces'
+  | 'JetBrains Mono'
+  | 'Arial Black';
+
 export interface CaptionStyleConfig {
   preset: CaptionStylePreset;
-  fontFamily: 'Plus Jakarta Sans' | 'Fraunces' | 'JetBrains Mono' | 'Arial Black';
+  fontFamily: CaptionFontFamily;
   fontSize: number;
   xPosition?: number; // 15 to 85 (% from left, default 50)
   yPosition: number; // 10 to 90 (% from top)
@@ -37,6 +87,22 @@ export interface CaptionStyleConfig {
   uppercase: boolean;
   maxWordsPerLine: number;
   animationIntensity: 'subtle' | 'medium' | 'dynamic';
+  // After Effects Motion & Visual FX
+  animationStyle?: CaptionAnimationStyle;
+  glowColor?: string;
+  glowBlur?: number; // 0 to 40
+  extrudeDepth?: number; // 0 to 14 (3D block extrusion)
+  extrudeColor?: string;
+  gradientEndColor?: string;
+  letterSpacing?: number; // 0 to 16px
+  hollowInactive?: boolean;
+  // Cinematic Behind-Building / Subject Depth Layer & Parallax Crossing
+  depthBehindSubject?: boolean;
+  depthMode?: CaptionDepthMode;
+  depthThreshold?: number; // 10 to 90
+  depthXrayOutline?: number; // 0 to 60 (% ghost rim opacity on building)
+  crossDirection?: CaptionCrossDirection;
+  crossSpeed?: number; // 10 to 100
 }
 
 export function sliderValueToYPosition(sliderVal: number): number {
@@ -49,14 +115,435 @@ export function yPositionToSliderValue(yPosition: number): number {
   return Math.round(((90 - clamped) / 80) * 100);
 }
 
-export const DEFAULT_STYLE_PRESETS: Record<CaptionStylePreset, {
-  name: string;
-  tagline: string;
-  config: CaptionStyleConfig;
-}> = {
+export const DEFAULT_STYLE_PRESETS: Record<
+  CaptionStylePreset,
+  {
+    name: string;
+    tagline: string;
+    category: 'cinematic-depth' | 'after-effects' | 'viral';
+    badge: string;
+    config: CaptionStyleConfig;
+  }
+> = {
+  'ae-behind-building': {
+    name: 'AE Behind Building (Cinematic Cross)',
+    tagline: 'Giant 3D title crosses horizontally behind buildings & subjects',
+    category: 'cinematic-depth',
+    badge: 'BEHIND FX',
+    config: {
+      preset: 'ae-behind-building',
+      fontFamily: 'Bebas Neue',
+      fontSize: 82,
+      xPosition: 50,
+      yPosition: 44,
+      textColor: '#FFFFFF',
+      activeWordColor: '#38BDF8',
+      activeBgColor: 'transparent',
+      boxBgColor: 'transparent',
+      strokeColor: '#000000',
+      strokeWidth: 4,
+      uppercase: true,
+      maxWordsPerLine: 3,
+      animationIntensity: 'dynamic',
+      animationStyle: 'cinematic-pan',
+      glowColor: '#38BDF8',
+      glowBlur: 18,
+      extrudeDepth: 6,
+      extrudeColor: '#0F172A',
+      letterSpacing: 6,
+      depthBehindSubject: true,
+      depthMode: 'auto-building-sky',
+      depthThreshold: 48,
+      depthXrayOutline: 26,
+      crossDirection: 'left-to-right',
+      crossSpeed: 55,
+    },
+  },
+  'ae-skyline-rise': {
+    name: 'AE Horizon Rise (Behind Subject)',
+    tagline: 'Monumental gold/amber title rises up from behind skyline & towers',
+    category: 'cinematic-depth',
+    badge: 'DEPTH RISE',
+    config: {
+      preset: 'ae-skyline-rise',
+      fontFamily: 'Anton',
+      fontSize: 76,
+      xPosition: 50,
+      yPosition: 46,
+      textColor: '#FEF08A',
+      activeWordColor: '#FACC15',
+      gradientEndColor: '#F97316',
+      activeBgColor: 'transparent',
+      boxBgColor: 'transparent',
+      strokeColor: '#000000',
+      strokeWidth: 4,
+      uppercase: true,
+      maxWordsPerLine: 3,
+      animationIntensity: 'dynamic',
+      animationStyle: 'cinematic-pan',
+      glowColor: '#F59E0B',
+      glowBlur: 20,
+      extrudeDepth: 5,
+      extrudeColor: '#1E1B4B',
+      letterSpacing: 4,
+      depthBehindSubject: true,
+      depthMode: 'auto-building-sky',
+      depthThreshold: 48,
+      depthXrayOutline: 24,
+      crossDirection: 'rise-up',
+      crossSpeed: 50,
+    },
+  },
+  'ae-neon-saber': {
+    name: 'AE Saber Neon Glow',
+    tagline: 'After Effects Saber electric neon core with multi-pass bloom',
+    category: 'after-effects',
+    badge: 'SABER GLOW',
+    config: {
+      preset: 'ae-neon-saber',
+      fontFamily: 'Orbitron',
+      fontSize: 50,
+      xPosition: 50,
+      yPosition: 50,
+      textColor: '#E0F2FE',
+      activeWordColor: '#00F0FF',
+      activeBgColor: 'transparent',
+      boxBgColor: 'transparent',
+      strokeColor: '#0284C7',
+      strokeWidth: 4,
+      uppercase: true,
+      maxWordsPerLine: 3,
+      animationIntensity: 'dynamic',
+      animationStyle: 'flicker',
+      glowColor: '#00F0FF',
+      glowBlur: 32,
+      letterSpacing: 3,
+      depthBehindSubject: false,
+      crossDirection: 'none',
+    },
+  },
+  'ae-3d-extrude': {
+    name: 'AE 3D Isometric Extrude',
+    tagline: 'Deep 3D stacked block extrusion with heavy perspective pop',
+    category: 'after-effects',
+    badge: '3D EXTRUDE',
+    config: {
+      preset: 'ae-3d-extrude',
+      fontFamily: 'Anton',
+      fontSize: 60,
+      xPosition: 50,
+      yPosition: 50,
+      textColor: '#FFFFFF',
+      activeWordColor: '#FACC15',
+      activeBgColor: 'transparent',
+      boxBgColor: 'transparent',
+      strokeColor: '#000000',
+      strokeWidth: 6,
+      uppercase: true,
+      maxWordsPerLine: 3,
+      animationIntensity: 'dynamic',
+      animationStyle: 'pop',
+      extrudeDepth: 11,
+      extrudeColor: '#0F172A',
+      letterSpacing: 2,
+      depthBehindSubject: false,
+      crossDirection: 'none',
+    },
+  },
+  'ae-rgb-glitch': {
+    name: 'AE RGB Split Cyberpunk Glitch',
+    tagline: 'Red/Cyan chromatic aberration split + frame slice jitter',
+    category: 'after-effects',
+    badge: 'RGB GLITCH',
+    config: {
+      preset: 'ae-rgb-glitch',
+      fontFamily: 'Montserrat',
+      fontSize: 54,
+      xPosition: 50,
+      yPosition: 50,
+      textColor: '#FFFFFF',
+      activeWordColor: '#F43F5E',
+      activeBgColor: '#090D16',
+      boxBgColor: 'transparent',
+      strokeColor: '#000000',
+      strokeWidth: 5,
+      uppercase: true,
+      maxWordsPerLine: 3,
+      animationIntensity: 'dynamic',
+      animationStyle: 'glitch',
+      glowColor: '#00F0FF',
+      glowBlur: 14,
+      letterSpacing: 2,
+      depthBehindSubject: false,
+      crossDirection: 'none',
+    },
+  },
+  'ae-whip-slide': {
+    name: 'AE Kinetic Whip Slide',
+    tagline: 'Words whip-pan upward from baseline with spring overshoot',
+    category: 'after-effects',
+    badge: 'WHIP PAN',
+    config: {
+      preset: 'ae-whip-slide',
+      fontFamily: 'Oswald',
+      fontSize: 58,
+      xPosition: 50,
+      yPosition: 50,
+      textColor: '#F8FAFC',
+      activeWordColor: '#34D399',
+      activeBgColor: 'transparent',
+      boxBgColor: 'transparent',
+      strokeColor: '#000000',
+      strokeWidth: 7,
+      uppercase: true,
+      maxWordsPerLine: 4,
+      animationIntensity: 'dynamic',
+      animationStyle: 'whip-slide',
+      extrudeDepth: 6,
+      extrudeColor: '#022C22',
+      letterSpacing: 2,
+      depthBehindSubject: false,
+      crossDirection: 'none',
+    },
+  },
+  'ae-bass-stomp': {
+    name: 'AE Bass Stomp Slam',
+    tagline: '1.6x to 1.0x heavy impact slam on every spoken word',
+    category: 'after-effects',
+    badge: 'BASS SLAM',
+    config: {
+      preset: 'ae-bass-stomp',
+      fontFamily: 'Anton',
+      fontSize: 62,
+      xPosition: 50,
+      yPosition: 50,
+      textColor: '#FFFFFF',
+      activeWordColor: '#FB923C',
+      activeBgColor: 'transparent',
+      boxBgColor: 'transparent',
+      strokeColor: '#000000',
+      strokeWidth: 8,
+      uppercase: true,
+      maxWordsPerLine: 3,
+      animationIntensity: 'dynamic',
+      animationStyle: 'stomp',
+      extrudeDepth: 8,
+      extrudeColor: '#431407',
+      letterSpacing: 2,
+      depthBehindSubject: false,
+      crossDirection: 'none',
+    },
+  },
+  'ae-gold-luxury': {
+    name: 'AE 24K Metallic Gold',
+    tagline: 'Multi-stop luxury gold gradient fill with 3D bevel shadow',
+    category: 'after-effects',
+    badge: '24K GOLD',
+    config: {
+      preset: 'ae-gold-luxury',
+      fontFamily: 'Cinzel',
+      fontSize: 52,
+      xPosition: 50,
+      yPosition: 50,
+      textColor: '#FEF9C3',
+      activeWordColor: '#FDE047',
+      gradientEndColor: '#D97706',
+      activeBgColor: 'transparent',
+      boxBgColor: 'rgba(15, 23, 42, 0.45)',
+      strokeColor: '#451A03',
+      strokeWidth: 5,
+      uppercase: true,
+      maxWordsPerLine: 4,
+      animationIntensity: 'medium',
+      animationStyle: 'pop',
+      glowColor: '#F59E0B',
+      glowBlur: 16,
+      extrudeDepth: 5,
+      extrudeColor: '#271202',
+      letterSpacing: 3,
+      depthBehindSubject: false,
+      crossDirection: 'none',
+    },
+  },
+  'ae-fire-inferno': {
+    name: 'AE Inferno Heat Wave',
+    tagline: 'Blazing yellow-to-crimson vertical gradient with upward float',
+    category: 'after-effects',
+    badge: 'INFERNO',
+    config: {
+      preset: 'ae-fire-inferno',
+      fontFamily: 'Bebas Neue',
+      fontSize: 66,
+      xPosition: 50,
+      yPosition: 50,
+      textColor: '#FEF08A',
+      activeWordColor: '#FACC15',
+      gradientEndColor: '#DC2626',
+      activeBgColor: 'transparent',
+      boxBgColor: 'transparent',
+      strokeColor: '#450A0A',
+      strokeWidth: 6,
+      uppercase: true,
+      maxWordsPerLine: 4,
+      animationIntensity: 'dynamic',
+      animationStyle: 'wave',
+      glowColor: '#EA580C',
+      glowBlur: 24,
+      extrudeDepth: 5,
+      extrudeColor: '#450A0A',
+      letterSpacing: 3,
+      depthBehindSubject: false,
+      crossDirection: 'none',
+    },
+  },
+  'ae-hollow-outline': {
+    name: 'AE Hollow Neon Stroke',
+    tagline: 'Inactive words are transparent neon outlines; active word fills solid',
+    category: 'after-effects',
+    badge: 'HOLLOW FX',
+    config: {
+      preset: 'ae-hollow-outline',
+      fontFamily: 'Montserrat',
+      fontSize: 56,
+      xPosition: 50,
+      yPosition: 50,
+      textColor: '#38BDF8',
+      activeWordColor: '#FFFFFF',
+      activeBgColor: 'transparent',
+      boxBgColor: 'transparent',
+      strokeColor: '#38BDF8',
+      strokeWidth: 4,
+      uppercase: true,
+      maxWordsPerLine: 3,
+      animationIntensity: 'dynamic',
+      animationStyle: 'pop',
+      hollowInactive: true,
+      glowColor: '#0EA5E9',
+      glowBlur: 20,
+      letterSpacing: 3,
+      depthBehindSubject: false,
+      crossDirection: 'none',
+    },
+  },
+  'ae-typewriter-hud': {
+    name: 'AE Sci-Fi Typewriter HUD',
+    tagline: 'Character-by-character terminal reveal with live cursor block',
+    category: 'after-effects',
+    badge: 'HUD TYPE',
+    config: {
+      preset: 'ae-typewriter-hud',
+      fontFamily: 'JetBrains Mono',
+      fontSize: 44,
+      xPosition: 50,
+      yPosition: 50,
+      textColor: '#A7F3D0',
+      activeWordColor: '#10B981',
+      activeBgColor: 'transparent',
+      boxBgColor: 'rgba(6, 20, 15, 0.82)',
+      strokeColor: '#000000',
+      strokeWidth: 3,
+      uppercase: false,
+      maxWordsPerLine: 5,
+      animationIntensity: 'medium',
+      animationStyle: 'typewriter',
+      glowColor: '#10B981',
+      glowBlur: 14,
+      letterSpacing: 1,
+      depthBehindSubject: false,
+      crossDirection: 'none',
+    },
+  },
+  'ae-sine-wave': {
+    name: 'AE Floating Wave Kinetic',
+    tagline: 'Continuous smooth sinusoidal wave motion across spoken words',
+    category: 'after-effects',
+    badge: 'WAVE FX',
+    config: {
+      preset: 'ae-sine-wave',
+      fontFamily: 'Plus Jakarta Sans',
+      fontSize: 52,
+      xPosition: 50,
+      yPosition: 50,
+      textColor: '#FFFFFF',
+      activeWordColor: '#C084FC',
+      gradientEndColor: '#6366F1',
+      activeBgColor: 'transparent',
+      boxBgColor: 'transparent',
+      strokeColor: '#1E1B4B',
+      strokeWidth: 6,
+      uppercase: true,
+      maxWordsPerLine: 4,
+      animationIntensity: 'dynamic',
+      animationStyle: 'wave',
+      glowColor: '#A855F7',
+      glowBlur: 18,
+      letterSpacing: 2,
+      depthBehindSubject: false,
+      crossDirection: 'none',
+    },
+  },
+  'ae-glass-capsule': {
+    name: 'AE Frosted Glass Capsule',
+    tagline: 'Modern translucent glass HUD bar with neon active word pill',
+    category: 'after-effects',
+    badge: 'GLASS HUD',
+    config: {
+      preset: 'ae-glass-capsule',
+      fontFamily: 'Plus Jakarta Sans',
+      fontSize: 46,
+      xPosition: 50,
+      yPosition: 50,
+      textColor: '#E2E8F0',
+      activeWordColor: '#FFFFFF',
+      activeBgColor: '#2563EB',
+      boxBgColor: 'rgba(15, 23, 42, 0.72)',
+      strokeColor: '#000000',
+      strokeWidth: 3,
+      uppercase: false,
+      maxWordsPerLine: 5,
+      animationIntensity: 'medium',
+      animationStyle: 'pop',
+      glowColor: '#3B82F6',
+      glowBlur: 12,
+      letterSpacing: 1,
+      depthBehindSubject: false,
+      crossDirection: 'none',
+    },
+  },
+  'ae-anamorphic-film': {
+    name: 'AE Anamorphic Cinema Title',
+    tagline: 'Wide letter-spaced Hollywood trailer typography with slow drift',
+    category: 'after-effects',
+    badge: 'TRAILER',
+    config: {
+      preset: 'ae-anamorphic-film',
+      fontFamily: 'Cinzel',
+      fontSize: 48,
+      xPosition: 50,
+      yPosition: 50,
+      textColor: '#F8FAFC',
+      activeWordColor: '#FDE047',
+      activeBgColor: 'transparent',
+      boxBgColor: 'transparent',
+      strokeColor: '#000000',
+      strokeWidth: 4,
+      uppercase: true,
+      maxWordsPerLine: 4,
+      animationIntensity: 'subtle',
+      animationStyle: 'cinematic-pan',
+      glowColor: '#FEF08A',
+      glowBlur: 12,
+      letterSpacing: 6,
+      crossDirection: 'slow-zoom',
+      crossSpeed: 35,
+      depthBehindSubject: false,
+    },
+  },
   'hormozi-pop': {
-    name: 'Creator Pop',
+    name: 'Creator Pop (Hormozi)',
     tagline: 'Bold active word pop with high-contrast stroke',
+    category: 'viral',
+    badge: 'VIRAL',
     config: {
       preset: 'hormozi-pop',
       fontFamily: 'Plus Jakarta Sans',
@@ -72,11 +559,14 @@ export const DEFAULT_STYLE_PRESETS: Record<CaptionStylePreset, {
       uppercase: true,
       maxWordsPerLine: 4,
       animationIntensity: 'dynamic',
+      animationStyle: 'pop',
     },
   },
   'word-highlight': {
     name: 'Word Highlight Box',
     tagline: 'Royal blue pill moves word-by-word as spoken',
+    category: 'viral',
+    badge: 'PILL BOX',
     config: {
       preset: 'word-highlight',
       fontFamily: 'Plus Jakarta Sans',
@@ -92,11 +582,14 @@ export const DEFAULT_STYLE_PRESETS: Record<CaptionStylePreset, {
       uppercase: false,
       maxWordsPerLine: 5,
       animationIntensity: 'medium',
+      animationStyle: 'pop',
     },
   },
   'boxed-pill': {
     name: 'Studio Boxed',
     tagline: 'Clean dark translucent backdrop for maximum legibility',
+    category: 'viral',
+    badge: 'STUDIO',
     config: {
       preset: 'boxed-pill',
       fontFamily: 'Plus Jakarta Sans',
@@ -112,11 +605,14 @@ export const DEFAULT_STYLE_PRESETS: Record<CaptionStylePreset, {
       uppercase: false,
       maxWordsPerLine: 6,
       animationIntensity: 'subtle',
+      animationStyle: 'pop',
     },
   },
   'karaoke-glow': {
     name: 'Emerald Fill',
     tagline: 'Progressive word-by-word color sweep',
+    category: 'viral',
+    badge: 'KARAOKE',
     config: {
       preset: 'karaoke-glow',
       fontFamily: 'Plus Jakarta Sans',
@@ -132,11 +628,14 @@ export const DEFAULT_STYLE_PRESETS: Record<CaptionStylePreset, {
       uppercase: true,
       maxWordsPerLine: 4,
       animationIntensity: 'medium',
+      animationStyle: 'karaoke',
     },
   },
   'bounce-bold': {
     name: 'Reels Bounce',
     tagline: 'Spring-scaled active words for short-form clips',
+    category: 'viral',
+    badge: 'BOUNCE',
     config: {
       preset: 'bounce-bold',
       fontFamily: 'Arial Black',
@@ -152,11 +651,14 @@ export const DEFAULT_STYLE_PRESETS: Record<CaptionStylePreset, {
       uppercase: true,
       maxWordsPerLine: 3,
       animationIntensity: 'dynamic',
+      animationStyle: 'pop',
     },
   },
   'editorial-clean': {
     name: 'Documentary Serif',
     tagline: 'Refined editorial subtitle style for interviews & films',
+    category: 'viral',
+    badge: 'SERIF',
     config: {
       preset: 'editorial-clean',
       fontFamily: 'Fraunces',
@@ -172,6 +674,7 @@ export const DEFAULT_STYLE_PRESETS: Record<CaptionStylePreset, {
       uppercase: false,
       maxWordsPerLine: 7,
       animationIntensity: 'subtle',
+      animationStyle: 'pop',
     },
   },
 };

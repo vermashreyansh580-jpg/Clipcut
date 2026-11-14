@@ -225,4 +225,13 @@ test('safeParseResponseJson gracefully handles HTML error pages without throwing
   assert.equal(parsedJson.count, 3);
 });
 
+import { DEFAULT_STYLE_PRESETS } from './subtitles';
 
+test('DEFAULT_STYLE_PRESETS provides 20 After Effects, Behind-Building Depth, and Viral styles', () => {
+  const keys = Object.keys(DEFAULT_STYLE_PRESETS);
+  assert.equal(keys.length, 20);
+  assert.equal(DEFAULT_STYLE_PRESETS['ae-behind-building'].config.depthBehindSubject, true);
+  assert.equal(DEFAULT_STYLE_PRESETS['ae-behind-building'].config.crossDirection, 'left-to-right');
+  assert.equal(DEFAULT_STYLE_PRESETS['ae-skyline-rise'].config.depthBehindSubject, true);
+  assert.equal(DEFAULT_STYLE_PRESETS['ae-skyline-rise'].config.crossDirection, 'rise-up');
+});

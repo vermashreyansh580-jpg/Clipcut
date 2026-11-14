@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   Loader2,
   MoveVertical,
+  Layers,
 } from 'lucide-react';
 
 interface CaptionCanvasPlayerProps {
@@ -28,7 +29,7 @@ interface CaptionCanvasPlayerProps {
   mediaFileName: string;
   cues: CaptionCue[];
   styleConfig: CaptionStyleConfig;
-  onPositionChange?: (patch: { xPosition?: number; yPosition?: number }) => void;
+  onPositionChange?: (patch: Partial<CaptionStyleConfig>) => void;
   aspectRatio: '9:16' | '16:9' | '1:1';
   onAspectRatioChange: (ratio: '9:16' | '16:9' | '1:1') => void;
   currentTime: number;
@@ -54,6 +55,7 @@ export default function CaptionCanvasPlayer({
   isTranscribing = false,
 }: CaptionCanvasPlayerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const fgMaskCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const isDraggingCanvasRef = useRef(false);
@@ -90,17 +92,192 @@ export default function CaptionCanvasPlayer({
     return { width: 1280, height: 720 };
   }, [aspectRatio]);
 
+  // Draws foreground architectural building towers on preview canvas when no video is uploaded yet
+  const drawDemoForegroundBuilding = (
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number
+  ) => {
+    ctx.save();
+    // Main central glass skyscraper silhouette standing in front of the crossing text
+    const towerW = Math.round(width * 0.28);
+    const towerX = Math.round(width * 0.5 - towerW * 0.45);
+    const towerTop = Math.round(height * 0.22);
+    const towerH = height - towerTop;
+
+    // Spire & stepped roof crown
+    ctx.fillStyle = '#090E1A';
+    ctx.fillRect(towerX + towerW * 0.46, towerTop - height * 0.1, towerW * 0.08, height * 0.1);
+    ctx.fillRect(towerX + towerW * 0.18, towerTop - height * 0.035, towerW * 0.64, height * 0.035);
+
+    // Main building body gradient
+    const bGrad = ctx.createLinearGradient(towerX, towerTop, towerX + towerW, height);
+    bGrad.addColorStop(0, '#0F172A');
+    bGrad.addColorStop(0.5, '#090D16');
+    bGrad.addColorStop(1, '#04070D');
+    ctx.fillStyle = bGrad;
+    ctx.fillRect(towerX, towerTop, towerW, towerH);
+
+    // Architectural rim highlight on building edge
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(towerX, towerTop, towerW, towerH);
+
+    // Subtle skyscraper window grid
+    ctx.fillStyle = 'rgba(186, 230, 253, 0.14)';
+    const cols = 5;
+    const rows = 16;
+    const padX = towerW * 0.12;
+    const cellW = (towerW - padX * 2) / cols;
+    const cellH = (towerH * 0.85) / rows;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if ((r + c * 3) % 4 !== 0) {
+          ctx.fillRect(
+            towerX + padX + c * cellW + 3,
+            towerTop + 24 + r * cellH,
+            cellW - 6,
+            cellH - 8
+          );
+        }
+      }
+    }
+
+    // Secondary right-side tower silhouette
+    const sideW = Math.round(width * 0.18);
+    const sideX = Math.round(width * 0.74);
+    const sideTop = Math.round(height * 0.38);
+    ctx.fillStyle = '#070B14';
+    ctx.fillRect(sideX, sideTop, sideW, height - sideTop);
+    ctx.restore();
+  };
+
+  // Extracts foreground building / subject pixels from the video frame inside the caption bounding box
+  const prepareVideoForegroundMask = (
+    mainCtx: CanvasRenderingContext2D,
+    canvasW: number,
+    canvasH: number,
+    patchX: number,
+    patchY: number,
+    patchW: number,
+    patchH: number,
+    style: CaptionStyleConfig
+  ): HTMLCanvasElement | null => {
+    const safeX = Math.max(0, Math.floor(patchX));
+    const safeY = Math.max(0, Math.floor(patchY));
+    const safeW = Math.min(canvasW - safeX, Math.ceil(patchW));
+    const safeH = Math.min(canvasH - safeY, Math.ceil(patchH));
+    if (safeW <= 4 || safeH <= 4) return null;
+
+    if (!fgMaskCanvasRef.current) {
+      fgMaskCanvasRef.current = document.createElement('canvas');
+    }
+    const fgCanvas = fgMaskCanvasRef.current;
+    // Downsample 2x for <0.3ms real-time pixel matting + natural bilinear edge feathering
+    const pw = Math.max(2, Math.round(safeW / 2));
+    const ph = Math.max(2, Math.round(safeH / 2));
+    if (fgCanvas.width !== pw || fgCanvas.height !== ph) {
+      fgCanvas.width = pw;
+      fgCanvas.height = ph;
+    }
+
+    const fgCtx = fgCanvas.getContext('2d', { willReadFrequently: true });
+    if (!fgCtx) return null;
+
+    fgCtx.clearRect(0, 0, pw, ph);
+    fgCtx.drawImage(mainCtx.canvas, safeX, safeY, safeW, safeH, 0, 0, pw, ph);
+
+    const imgData = fgCtx.getImageData(0, 0, pw, ph);
+    const data = imgData.data;
+
+    // Sample sky/background reference from top corners of the patch
+    let bgR = 0;
+    let bgG = 0;
+    let bgB = 0;
+    let sampleCount = 0;
+    const stepX = Math.max(1, Math.floor(pw / 12));
+    for (let x = 0; x < pw; x += stepX) {
+      const idxTop = x * 4;
+      bgR += data[idxTop];
+      bgG += data[idxTop + 1];
+      bgB += data[idxTop + 2];
+      sampleCount++;
+    }
+    if (sampleCount > 0) {
+      bgR /= sampleCount;
+      bgG /= sampleCount;
+      bgB /= sampleCount;
+    }
+    const bgLum = 0.299 * bgR + 0.587 * bgG + 0.114 * bgB;
+
+    const thresholdSetting = style.depthThreshold ?? 48;
+    // Map threshold (10..90) to contrast cutoffs
+    const cutoff = Math.max(12, Math.min(130, (100 - thresholdSetting) * 1.15));
+    const feather = 22;
+    const depthMode = style.depthMode || 'auto-building-sky';
+
+    for (let y = 0; y < ph; y++) {
+      const relXCenterWeight =
+        depthMode === 'center-portrait'
+          ? 1 - Math.abs((y - ph * 0.5) / (ph * 0.7)) * 0.2
+          : 1;
+      for (let x = 0; x < pw; x++) {
+        const i = (y * pw + x) * 4;
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+
+        const dR = r - bgR;
+        const dG = g - bgG;
+        const dB = b - bgB;
+        const colorDist = Math.sqrt(dR * dR + dG * dG + dB * dB);
+
+        let fgScore = 0;
+        if (depthMode === 'dark-silhouette') {
+          // Dark building / tower / silhouette against brighter sky
+          fgScore = Math.max(bgLum - lum, colorDist * 0.55);
+        } else if (depthMode === 'bright-subject') {
+          // Illuminated subject / building against night sky
+          fgScore = Math.max(lum - bgLum, colorDist * 0.65);
+        } else if (depthMode === 'center-portrait') {
+          const horizDist = Math.abs(x - pw * 0.5) / (pw * 0.5);
+          const centerBoost = Math.max(0, 1 - horizDist * 0.85) * 28;
+          fgScore = (colorDist * 0.75 + Math.abs(lum - bgLum) * 0.6) * relXCenterWeight + centerBoost;
+        } else {
+          // 'auto-building-sky': automatically segments buildings/structures against sky or backdrop
+          const lumDiff = bgLum > 115 ? bgLum - lum : Math.abs(lum - bgLum);
+          fgScore = Math.max(lumDiff * 1.15, colorDist * 0.72);
+        }
+
+        if (fgScore <= cutoff - feather) {
+          data[i + 3] = 0;
+        } else if (fgScore >= cutoff + feather) {
+          data[i + 3] = 255;
+        } else {
+          const t = (fgScore - (cutoff - feather)) / (feather * 2);
+          data[i + 3] = Math.round(t * t * (3 - 2 * t) * 255);
+        }
+      }
+    }
+
+    fgCtx.putImageData(imgData, 0, 0);
+    return fgCanvas;
+  };
+
   const drawFrame = useCallback(
     (ctx: CanvasRenderingContext2D, width: number, height: number, nowSec: number) => {
       const style = styleRef.current;
       const activeCues = cuesRef.current;
 
-      // 1. Background / Video layer (Strictly NO watermark, optimized single-pass render)
+      // 1. Background / Video layer (Strictly NO watermark)
       ctx.fillStyle = '#0B1120';
       ctx.fillRect(0, 0, width, height);
 
       const vid = videoRef.current;
-      if (mediaType === 'video' && vid && vid.readyState >= 2) {
+      const hasLiveVideo = mediaType === 'video' && vid && vid.readyState >= 2;
+
+      if (hasLiveVideo && vid) {
         const vw = vid.videoWidth || width;
         const vh = vid.videoHeight || height;
         const scale = Math.min(width / vw, height / vh);
@@ -109,7 +286,6 @@ export default function CaptionCanvasPlayer({
         const offsetX = (width - drawW) / 2;
         const offsetY = (height - drawH) / 2;
 
-        // Only draw ambient fill if video does not already cover at least 92% of the canvas
         if (drawW < width * 0.92 || drawH < height * 0.92) {
           ctx.save();
           ctx.globalAlpha = 0.22;
@@ -126,12 +302,25 @@ export default function CaptionCanvasPlayer({
 
         ctx.drawImage(vid, offsetX, offsetY, drawW, drawH);
       } else {
-        // Clean studio slate background for audio-only lyric videos or SRT preview
-        const grad = ctx.createLinearGradient(0, 0, width, height);
-        grad.addColorStop(0, '#0F172A');
-        grad.addColorStop(1, '#1E293B');
+        // Studio background (with skyline horizon when Behind-Building depth mode is previewed without a video)
+        const grad = ctx.createLinearGradient(0, 0, 0, height);
+        if (style.depthBehindSubject) {
+          grad.addColorStop(0, '#0F172A');
+          grad.addColorStop(0.45, '#1E293B');
+          grad.addColorStop(1, '#090D16');
+        } else {
+          grad.addColorStop(0, '#0F172A');
+          grad.addColorStop(1, '#1E293B');
+        }
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, width, height);
+
+        if (style.depthBehindSubject && mediaType !== 'audio') {
+          // Distant background skyline buildings (behind the text)
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
+          ctx.fillRect(width * 0.08, height * 0.42, width * 0.16, height * 0.58);
+          ctx.fillRect(width * 0.27, height * 0.48, width * 0.14, height * 0.52);
+        }
 
         if (mediaType === 'audio') {
           const barCount = 24;
@@ -161,7 +350,7 @@ export default function CaptionCanvasPlayer({
         }
       }
 
-      // 2. Find current active cue (with 1.8s continuous voiceover hold so captions never flicker between phrases)
+      // 2. Find current active cue (with 1.8s continuous voiceover hold so captions never flicker)
       let activeCue = activeCues.find(
         (c) => nowSec >= c.start - 0.05 && nowSec <= c.end + 0.05
       );
@@ -181,25 +370,44 @@ export default function CaptionCanvasPlayer({
             id: 'preview-guide',
             index: 1,
             start: 0,
-            end: 9999,
+            end: 6,
             text: transcribingRef.current
               ? 'Generating AI Captions…'
-              : 'पॉइंटर स्लाइड करें · Caption Position',
+              : style.depthBehindSubject
+                ? 'CINEMATIC BEHIND BUILDING'
+                : 'AFTER EFFECTS STUDIO',
             words: transcribingRef.current
               ? [
-                  { word: 'Generating', start: 0, end: 9999 },
-                  { word: 'AI', start: 9999, end: 9999 },
-                  { word: 'Captions…', start: 9999, end: 9999 },
+                  { word: 'Generating', start: 0, end: 2 },
+                  { word: 'AI', start: 2, end: 4 },
+                  { word: 'Captions…', start: 4, end: 6 },
                 ]
-              : [
-                  { word: 'पॉइंटर', start: 0, end: 9999 },
-                  { word: 'स्लाइड', start: 9999, end: 9999 },
-                  { word: 'करें', start: 9999, end: 9999 },
-                ],
+              : style.depthBehindSubject
+                ? [
+                    { word: 'CINEMATIC', start: 0, end: 2 },
+                    { word: 'BEHIND', start: 2, end: 4 },
+                    { word: 'BUILDING', start: 4, end: 6 },
+                  ]
+                : [
+                    { word: 'AFTER', start: 0, end: 2 },
+                    { word: 'EFFECTS', start: 2, end: 4 },
+                    { word: 'STUDIO', start: 4, end: 6 },
+                  ],
           };
         }
       }
-      if (!activeCue) return;
+      if (!activeCue) {
+        if (!hasLiveVideo && style.depthBehindSubject && mediaType !== 'audio') {
+          drawDemoForegroundBuilding(ctx, width, height);
+        }
+        return;
+      }
+
+      const cueDur = Math.max(0.25, activeCue.end - activeCue.start);
+      const rawCueProgress =
+        activeCue.id === 'preview-guide'
+          ? (nowSec % 4) / 4
+          : Math.min(1, Math.max(0, (nowSec - activeCue.start) / cueDur));
 
       const words =
         activeCue.words && activeCue.words.length > 0
@@ -208,15 +416,28 @@ export default function CaptionCanvasPlayer({
 
       const scaleFactor = width / 680;
       const computedFontSize = Math.max(
-        28,
+        26,
         Math.round(style.fontSize * scaleFactor)
       );
-      const fontWeight = style.preset === 'editorial-clean' ? '600' : '800';
+      const fontWeight =
+        style.fontFamily === 'Bebas Neue' || style.fontFamily === 'Anton'
+          ? '400'
+          : style.preset === 'editorial-clean'
+            ? '600'
+            : '800';
+
+      ctx.save();
       ctx.font = `${fontWeight} ${computedFontSize}px "${style.fontFamily}", sans-serif`;
       ctx.textBaseline = 'middle';
 
-      const spaceWidth = ctx.measureText(' ').width * 1.15;
-      const maxLineWidth = width * 0.86;
+      const trackingPx = Math.round((style.letterSpacing || 0) * scaleFactor);
+      if ('letterSpacing' in ctx) {
+        (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing =
+          `${trackingPx}px`;
+      }
+
+      const spaceWidth = ctx.measureText(' ').width * 1.18 + trackingPx;
+      const maxLineWidth = width * 0.88;
 
       interface MeasuredWord {
         text: string;
@@ -224,23 +445,51 @@ export default function CaptionCanvasPlayer({
         isActive: boolean;
         isPast: boolean;
         progress: number;
+        wordIndex: number;
       }
 
-      const measuredWords: MeasuredWord[] = words.map((w) => {
-        const displayWord = style.uppercase ? w.word.toUpperCase() : w.word;
-        const wWidth = ctx.measureText(displayWord).width;
-        const isActive = nowSec >= w.start - 0.04 && nowSec <= w.end + 0.04;
-        const isPast = nowSec > w.end;
+      const measuredWords: MeasuredWord[] = words.map((w, wordIndex) => {
+        const rawText = style.uppercase ? w.word.toUpperCase() : w.word;
+        const isActive =
+          activeCue.id === 'preview-guide'
+            ? wordIndex === 1
+            : nowSec >= w.start - 0.04 && nowSec <= w.end + 0.04;
+        const isPast =
+          activeCue.id === 'preview-guide' ? wordIndex === 0 : nowSec > w.end;
         const wordDur = Math.max(0.05, w.end - w.start);
-        const progress = isActive
-          ? Math.min(1, Math.max(0, (nowSec - w.start) / wordDur))
-          : 0;
+        const progress =
+          activeCue.id === 'preview-guide'
+            ? 0.5
+            : isActive
+              ? Math.min(1, Math.max(0, (nowSec - w.start) / wordDur))
+              : isPast
+                ? 1
+                : 0;
+
+        // Typewriter character reveal if animationStyle === 'typewriter'
+        let displayWord = rawText;
+        if (style.animationStyle === 'typewriter' && activeCue.id !== 'preview-guide') {
+          if (!isPast && !isActive) {
+            displayWord = '';
+          } else if (isActive) {
+            const charCount = Math.max(
+              1,
+              Math.ceil(rawText.length * Math.min(1, progress * 1.25))
+            );
+            displayWord = `${rawText.slice(0, charCount)}▌`;
+          }
+        }
+
+        const wWidth =
+          ctx.measureText(rawText).width + rawText.length * trackingPx * 0.15;
+
         return {
           text: displayWord,
           width: wWidth,
           isActive,
           isPast,
           progress,
+          wordIndex,
         };
       });
 
@@ -250,7 +499,9 @@ export default function CaptionCanvasPlayer({
 
       for (const mw of measuredWords) {
         const addedWidth =
-          currentLine.length === 0 ? mw.width : currentLineWidth + spaceWidth + mw.width;
+          currentLine.length === 0
+            ? mw.width
+            : currentLineWidth + spaceWidth + mw.width;
         if (
           (addedWidth > maxLineWidth ||
             currentLine.length >= style.maxWordsPerLine) &&
@@ -266,21 +517,75 @@ export default function CaptionCanvasPlayer({
       }
       if (currentLine.length > 0) lines.push(currentLine);
 
-      const lineHeight = computedFontSize * 1.32;
+      // Compute Cinematic Crossing / Parallax Offset (for crossing behind building/subject)
+      const crossDir = style.crossDirection || 'none';
+      const speedRatio = (style.crossSpeed ?? 55) / 100;
+      let crossOffsetX = 0;
+      let crossOffsetY = 0;
+      let crossScale = 1;
+
+      if (crossDir === 'left-to-right') {
+        const travel = width * (0.18 + speedRatio * 0.28);
+        crossOffsetX = -travel * 0.5 + rawCueProgress * travel;
+      } else if (crossDir === 'right-to-left') {
+        const travel = width * (0.18 + speedRatio * 0.28);
+        crossOffsetX = travel * 0.5 - rawCueProgress * travel;
+      } else if (crossDir === 'rise-up') {
+        const travelY = height * (0.08 + speedRatio * 0.14);
+        crossOffsetY = travelY * 0.65 - rawCueProgress * travelY;
+      } else if (crossDir === 'slow-zoom') {
+        crossScale = 0.92 + rawCueProgress * 0.16 * (0.5 + speedRatio);
+      }
+
+      const lineHeight = computedFontSize * 1.3;
       const totalBlockHeight = lines.length * lineHeight;
       const xPosPct = style.xPosition ?? 50;
-      const anchorX = (width * xPosPct) / 100;
-      const baseY = (height * style.yPosition) / 100 - totalBlockHeight / 2;
+      const anchorX = (width * xPosPct) / 100 + crossOffsetX;
+      const baseY =
+        (height * style.yPosition) / 100 - totalBlockHeight / 2 + crossOffsetY;
 
-      if (style.boxBgColor && style.boxBgColor !== 'transparent') {
-        const widestLine = Math.max(
-          ...lines.map((line) =>
-            line.reduce(
-              (acc, w, idx) => acc + w.width + (idx > 0 ? spaceWidth : 0),
-              0
-            )
+      const widestLine = Math.max(
+        40,
+        ...lines.map((line) =>
+          line.reduce(
+            (acc, w, idx) => acc + w.width + (idx > 0 ? spaceWidth : 0),
+            0
           )
+        )
+      );
+
+      // Step 2B: If Depth Behind Building / Subject is enabled on a real video, capture foreground mask BEFORE drawing text
+      const padBoundX = computedFontSize * 1.1;
+      const padBoundY = computedFontSize * 0.85;
+      const patchX = anchorX - widestLine / 2 - padBoundX;
+      const patchY = baseY - padBoundY;
+      const patchW = widestLine + padBoundX * 2;
+      const patchH = totalBlockHeight + padBoundY * 2;
+
+      let fgMaskCanvas: HTMLCanvasElement | null = null;
+      if (style.depthBehindSubject && hasLiveVideo) {
+        fgMaskCanvas = prepareVideoForegroundMask(
+          ctx,
+          width,
+          height,
+          patchX,
+          patchY,
+          patchW,
+          patchH,
+          style
         );
+      }
+
+      // Apply global slow-zoom if enabled
+      if (crossScale !== 1) {
+        const blockCenterY = baseY + totalBlockHeight / 2;
+        ctx.translate(anchorX, blockCenterY);
+        ctx.scale(crossScale, crossScale);
+        ctx.translate(-anchorX, -blockCenterY);
+      }
+
+      // Draw Backdrop Box if configured
+      if (style.boxBgColor && style.boxBgColor !== 'transparent') {
         const padX = computedFontSize * 0.55;
         const padY = computedFontSize * 0.35;
         ctx.save();
@@ -294,81 +599,249 @@ export default function CaptionCanvasPlayer({
           14
         );
         ctx.fill();
+        if (style.preset === 'ae-glass-capsule') {
+          ctx.strokeStyle = 'rgba(148, 163, 184, 0.38)';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
         ctx.restore();
       }
 
-      lines.forEach((line, lineIdx) => {
-        const lineW = line.reduce(
-          (acc, w, idx) => acc + w.width + (idx > 0 ? spaceWidth : 0),
-          0
-        );
-        let cursorX = anchorX - lineW / 2;
-        const centerY = baseY + lineIdx * lineHeight + lineHeight / 2;
+      const animStyle = style.animationStyle || 'pop';
+      const extrudeDepth = Math.round((style.extrudeDepth || 0) * scaleFactor);
+      const extrudeColor = style.extrudeColor || '#0F172A';
+      const glowBlur = Math.round((style.glowBlur || 0) * scaleFactor);
+      const glowColor = style.glowColor || style.activeWordColor;
 
-        line.forEach((mw) => {
-          ctx.save();
-          const wordCenterX = cursorX + mw.width / 2;
+      // Helper to render text lines (either full fill/3D or X-Ray rim outline pass)
+      const renderCaptionLines = (xrayOutlineOnly: boolean) => {
+        lines.forEach((line, lineIdx) => {
+          const lineW = line.reduce(
+            (acc, w, idx) => acc + w.width + (idx > 0 ? spaceWidth : 0),
+            0
+          );
+          let cursorX = anchorX - lineW / 2;
+          const centerY = baseY + lineIdx * lineHeight + lineHeight / 2;
 
-          let wordScale = 1;
-          if (mw.isActive) {
-            const popBoost =
-              style.animationIntensity === 'dynamic'
-                ? 0.14
-                : style.animationIntensity === 'medium'
-                  ? 0.08
-                  : 0.04;
-            const bounce = Math.sin(mw.progress * Math.PI);
-            wordScale = 1 + popBoost * bounce;
-          }
+          line.forEach((mw) => {
+            if (!mw.text) {
+              cursorX += mw.width + spaceWidth;
+              return;
+            }
 
-          if (wordScale !== 1) {
-            ctx.translate(wordCenterX, centerY);
-            ctx.scale(wordScale, wordScale);
-            ctx.translate(-wordCenterX, -centerY);
-          }
+            ctx.save();
+            const wordCenterX = cursorX + mw.width / 2;
 
-          if (
-            mw.isActive &&
-            style.activeBgColor &&
-            style.activeBgColor !== 'transparent'
-          ) {
-            const pillPadX = computedFontSize * 0.24;
-            const pillPadY = computedFontSize * 0.16;
-            ctx.fillStyle = style.activeBgColor;
-            ctx.beginPath();
-            ctx.roundRect(
-              cursorX - pillPadX,
-              centerY - computedFontSize / 2 - pillPadY,
-              mw.width + pillPadX * 2,
-              computedFontSize + pillPadY * 2,
-              10
-            );
-            ctx.fill();
-          }
+            let wordScale = 1;
+            let wordOffsetY = 0;
+            let wordOffsetX = 0;
 
-          if (style.strokeWidth > 0 && style.strokeColor !== 'transparent') {
-            ctx.lineJoin = 'round';
-            ctx.miterLimit = 2;
-            ctx.lineWidth = Math.max(2, style.strokeWidth * scaleFactor);
-            ctx.strokeStyle = style.strokeColor;
-            ctx.strokeText(mw.text, cursorX, centerY);
-          }
+            if (animStyle === 'pop') {
+              if (mw.isActive) {
+                const popBoost =
+                  style.animationIntensity === 'dynamic'
+                    ? 0.16
+                    : style.animationIntensity === 'medium'
+                      ? 0.09
+                      : 0.04;
+                wordScale = 1 + popBoost * Math.sin(mw.progress * Math.PI);
+              }
+            } else if (animStyle === 'whip-slide') {
+              if (mw.isActive) {
+                const inv = Math.max(0, 1 - mw.progress * 1.6);
+                wordOffsetY = inv * inv * computedFontSize * 0.48;
+                wordScale = 1 + 0.1 * Math.sin(mw.progress * Math.PI);
+              }
+            } else if (animStyle === 'stomp') {
+              if (mw.isActive) {
+                const slam = Math.max(0, 1 - mw.progress * 2.2);
+                wordScale = 1 + slam * 0.55;
+              }
+            } else if (animStyle === 'wave') {
+              wordOffsetY =
+                Math.sin(nowSec * 5.2 + mw.wordIndex * 0.95) *
+                (computedFontSize * 0.13);
+            } else if (animStyle === 'glitch' && mw.isActive) {
+              wordOffsetX = Math.sin(nowSec * 48) * 3 * scaleFactor;
+            }
 
-          if (style.preset === 'karaoke-glow') {
-            ctx.fillStyle =
-              mw.isActive || mw.isPast ? style.activeWordColor : style.textColor;
-          } else {
-            ctx.fillStyle = mw.isActive
-              ? style.activeWordColor
-              : style.textColor;
-          }
+            const drawY = centerY + wordOffsetY;
+            const drawX = cursorX + wordOffsetX;
 
-          ctx.fillText(mw.text, cursorX, centerY);
-          ctx.restore();
+            if (wordScale !== 1) {
+              ctx.translate(wordCenterX, drawY);
+              ctx.scale(wordScale, wordScale);
+              ctx.translate(-wordCenterX, -drawY);
+            }
 
-          cursorX += mw.width + spaceWidth;
+            if (xrayOutlineOnly) {
+              ctx.strokeStyle = style.activeWordColor || '#38BDF8';
+              ctx.lineWidth = Math.max(1.5, 2 * scaleFactor);
+              ctx.strokeText(mw.text, drawX, drawY);
+              ctx.restore();
+              cursorX += mw.width + spaceWidth;
+              return;
+            }
+
+            // Active word pill background
+            if (
+              mw.isActive &&
+              style.activeBgColor &&
+              style.activeBgColor !== 'transparent'
+            ) {
+              const pillPadX = computedFontSize * 0.24;
+              const pillPadY = computedFontSize * 0.16;
+              ctx.fillStyle = style.activeBgColor;
+              ctx.beginPath();
+              ctx.roundRect(
+                drawX - pillPadX,
+                drawY - computedFontSize / 2 - pillPadY,
+                mw.width + pillPadX * 2,
+                computedFontSize + pillPadY * 2,
+                10
+              );
+              ctx.fill();
+            }
+
+            // After Effects RGB Chromatic Aberration Split on Glitch mode
+            if (animStyle === 'glitch' && (mw.isActive || style.preset === 'ae-rgb-glitch')) {
+              const shift = (mw.isActive ? 5 : 2.5) * scaleFactor;
+              ctx.save();
+              ctx.globalAlpha = 0.78;
+              ctx.fillStyle = '#FF0055';
+              ctx.fillText(mw.text, drawX - shift, drawY - shift * 0.3);
+              ctx.fillStyle = '#00F0FF';
+              ctx.fillText(mw.text, drawX + shift, drawY + shift * 0.3);
+              ctx.restore();
+            }
+
+            // After Effects 3D Isometric Stacked Extrusion
+            if (extrudeDepth > 0) {
+              ctx.save();
+              ctx.fillStyle = extrudeColor;
+              const steps = Math.min(12, extrudeDepth);
+              for (let d = steps; d >= 1; d--) {
+                ctx.fillText(mw.text, drawX + d * 0.85, drawY + d);
+              }
+              ctx.restore();
+            }
+
+            // After Effects Saber / Neon Outer Glow
+            if (glowBlur > 0) {
+              const flickerMult =
+                animStyle === 'flicker'
+                  ? 0.75 + 0.25 * Math.sin(nowSec * 28 + mw.wordIndex)
+                  : 1;
+              ctx.shadowColor = glowColor;
+              ctx.shadowBlur = glowBlur * flickerMult;
+            }
+
+            // Text stroke
+            if (style.strokeWidth > 0 && style.strokeColor !== 'transparent') {
+              ctx.lineJoin = 'round';
+              ctx.miterLimit = 2;
+              ctx.lineWidth = Math.max(2, style.strokeWidth * scaleFactor);
+              ctx.strokeStyle = style.strokeColor;
+              ctx.strokeText(mw.text, drawX, drawY);
+            }
+
+            // Hollow Outline Mode: Inactive words are hollow neon outlines, active word is solid
+            const isHollow = Boolean(style.hollowInactive && !mw.isActive);
+            if (!isHollow) {
+              if (style.gradientEndColor && !mw.isActive) {
+                const textGrad = ctx.createLinearGradient(
+                  drawX,
+                  drawY - computedFontSize * 0.5,
+                  drawX,
+                  drawY + computedFontSize * 0.5
+                );
+                textGrad.addColorStop(0, style.textColor);
+                textGrad.addColorStop(1, style.gradientEndColor);
+                ctx.fillStyle = textGrad;
+              } else if (style.gradientEndColor && mw.isActive) {
+                const activeGrad = ctx.createLinearGradient(
+                  drawX,
+                  drawY - computedFontSize * 0.5,
+                  drawX,
+                  drawY + computedFontSize * 0.5
+                );
+                activeGrad.addColorStop(0, style.activeWordColor);
+                activeGrad.addColorStop(1, style.gradientEndColor);
+                ctx.fillStyle = activeGrad;
+              } else if (
+                style.preset === 'karaoke-glow' ||
+                animStyle === 'karaoke'
+              ) {
+                ctx.fillStyle =
+                  mw.isActive || mw.isPast
+                    ? style.activeWordColor
+                    : style.textColor;
+              } else {
+                ctx.fillStyle = mw.isActive
+                  ? style.activeWordColor
+                  : style.textColor;
+              }
+
+              ctx.fillText(mw.text, drawX, drawY);
+            }
+
+            ctx.restore();
+            cursorX += mw.width + spaceWidth;
+          });
         });
-      });
+      };
+
+      // Render Layer 2: Main Caption Layer
+      renderCaptionLines(false);
+      ctx.restore();
+
+      // Render Layer 3: Foreground Building / Subject Occlusion Layer ON TOP of the captions!
+      if (style.depthBehindSubject) {
+        if (hasLiveVideo && fgMaskCanvas) {
+          const safeX = Math.max(0, Math.floor(patchX));
+          const safeY = Math.max(0, Math.floor(patchY));
+          const safeW = Math.min(width - safeX, Math.ceil(patchW));
+          const safeH = Math.min(height - safeY, Math.ceil(patchH));
+          ctx.save();
+          ctx.imageSmoothingEnabled = true;
+          ctx.drawImage(
+            fgMaskCanvas,
+            0,
+            0,
+            fgMaskCanvas.width,
+            fgMaskCanvas.height,
+            safeX,
+            safeY,
+            safeW,
+            safeH
+          );
+          ctx.restore();
+        } else if (!hasLiveVideo && mediaType !== 'audio') {
+          drawDemoForegroundBuilding(ctx, width, height);
+        }
+
+        // Optional Layer 4: Subtle After Effects X-Ray Rim Outline visible through the building
+        const xrayOpacity = (style.depthXrayOutline ?? 24) / 100;
+        if (xrayOpacity > 0.02) {
+          ctx.save();
+          ctx.font = `${fontWeight} ${computedFontSize}px "${style.fontFamily}", sans-serif`;
+          ctx.textBaseline = 'middle';
+          if ('letterSpacing' in ctx) {
+            (
+              ctx as CanvasRenderingContext2D & { letterSpacing: string }
+            ).letterSpacing = `${trackingPx}px`;
+          }
+          if (crossScale !== 1) {
+            const blockCenterY = baseY + totalBlockHeight / 2;
+            ctx.translate(anchorX, blockCenterY);
+            ctx.scale(crossScale, crossScale);
+            ctx.translate(-anchorX, -blockCenterY);
+          }
+          ctx.globalAlpha = xrayOpacity;
+          renderCaptionLines(true);
+          ctx.restore();
+        }
+      }
     },
     [mediaType]
   );
@@ -389,7 +862,7 @@ export default function CaptionCanvasPlayer({
     }
   }, [currentTime, styleConfig, cues, aspectRatio, isTranscribing, getCanvasDimensions, drawFrame]);
 
-  // Also force an immediate canvas draw whenever `cues` or `styleConfig` updates even while playing
+  // Force an immediate canvas draw whenever `cues` or `styleConfig` updates even while playing
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -567,7 +1040,6 @@ export default function CaptionCanvasPlayer({
 
       const stream = canvas.captureStream(30);
 
-      // Attach audio track if available
       if (mediaEl && mediaUrl) {
         try {
           const elWithCapture = mediaEl as HTMLMediaElement & {
@@ -586,7 +1058,6 @@ export default function CaptionCanvasPlayer({
         }
       }
 
-      // Prefer hardware-accelerated H.264 / MP4 or fast VP8 over slow software VP9 to eliminate export lag
       const mimeTypes = [
         'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
         'video/mp4',
@@ -619,7 +1090,6 @@ export default function CaptionCanvasPlayer({
           const rawBlob = new Blob(chunks, {
             type: supportedMime || 'video/webm',
           });
-          // Patch WebM EBML Duration (0x4489) or MP4 mvhd/tkhd/mdhd Duration so phones never show 0:00
           const fixedBlob = await fixVideoDurationMetadata(
             rawBlob,
             recordedDurationSec
@@ -629,7 +1099,6 @@ export default function CaptionCanvasPlayer({
         };
       });
 
-      // Seek media to 0:00 and wait for seek to settle before starting recorder
       if (mediaEl) {
         mediaEl.currentTime = 0;
         await new Promise<void>((res) => {
@@ -714,11 +1183,11 @@ export default function CaptionCanvasPlayer({
   return (
     <div className="flex flex-col h-full bg-slate-950 rounded-xl border border-slate-800 overflow-hidden">
       {/* Top Player Toolbar */}
-      <div className="flex items-center justify-between px-4 py-2.5 bg-slate-900 border-b border-slate-800">
+      <div className="flex items-center justify-between px-4 py-2.5 bg-slate-900 border-b border-slate-800 gap-2">
         <div className="flex items-center gap-2 text-xs text-slate-300 font-medium truncate">
           <Film className="w-3.5 h-3.5 text-blue-400 shrink-0" />
           <span className="truncate">
-            {mediaFileName || 'Live Caption Canvas Preview'}
+            {mediaFileName || 'After Effects & Cinematic Depth Canvas'}
           </span>
           <span aria-hidden="true" className="text-slate-600">
             ·
@@ -728,30 +1197,60 @@ export default function CaptionCanvasPlayer({
           </span>
         </div>
 
-        {/* Aspect Ratio Selector */}
-        <div
-          className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800"
-          role="group"
-          aria-label="Canvas aspect ratio"
-        >
-          {(['9:16', '16:9', '1:1'] as const).map((ratio) => (
-            <button
-              key={ratio}
-              type="button"
-              onClick={() => onAspectRatioChange(ratio)}
-              className={`px-2.5 py-1 text-xs font-mono tabular-nums rounded transition-colors whitespace-nowrap shrink-0 ${
-                aspectRatio === ratio
-                  ? 'bg-blue-600 text-white font-semibold'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              {ratio}
-            </button>
-          ))}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Quick One-Click Toggle for Cinematic Text Behind Building / Subject */}
+          <button
+            type="button"
+            onClick={() =>
+              onPositionChange?.({
+                depthBehindSubject: !styleConfig.depthBehindSubject,
+                crossDirection:
+                  !styleConfig.depthBehindSubject &&
+                  (!styleConfig.crossDirection || styleConfig.crossDirection === 'none')
+                    ? 'left-to-right'
+                    : styleConfig.crossDirection,
+              })
+            }
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors border ${
+              styleConfig.depthBehindSubject
+                ? 'bg-sky-500/20 border-sky-400 text-sky-300'
+                : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+            }`}
+            title="Place captions behind buildings & subjects with cinematic crossing motion"
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>
+              {styleConfig.depthBehindSubject
+                ? 'Behind Building: ON'
+                : 'Behind Building FX'}
+            </span>
+          </button>
+
+          {/* Aspect Ratio Selector */}
+          <div
+            className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800"
+            role="group"
+            aria-label="Canvas aspect ratio"
+          >
+            {(['9:16', '16:9', '1:1'] as const).map((ratio) => (
+              <button
+                key={ratio}
+                type="button"
+                onClick={() => onAspectRatioChange(ratio)}
+                className={`px-2 py-1 text-xs font-mono tabular-nums rounded transition-colors whitespace-nowrap shrink-0 ${
+                  aspectRatio === ratio
+                    ? 'bg-blue-600 text-white font-semibold'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                {ratio}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Offscreen Hardware-Decoded Media Elements (not display:none so mobile browsers keep hardware decoding & duration active) */}
+      {/* Offscreen Hardware-Decoded Media Elements */}
       {mediaUrl && mediaType === 'video' && (
         <video
           ref={videoRef}
@@ -791,7 +1290,7 @@ export default function CaptionCanvasPlayer({
         />
       )}
 
-      {/* Center Canvas Stage (Supports Direct Drag-Anywhere Caption Positioning) */}
+      {/* Center Canvas Stage */}
       <div className="relative flex-1 flex items-center justify-center p-4 bg-slate-950 min-h-[440px]">
         {isTranscribing && (
           <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-blue-950/90 border border-blue-700 text-xs font-semibold text-blue-100 shadow-lg">
@@ -883,7 +1382,6 @@ export default function CaptionCanvasPlayer({
 
       {/* Timeline & Transport Controls */}
       <div className="px-4 py-3 bg-slate-900 border-t border-slate-800 space-y-2.5">
-        {/* Interactive Cue Timeline Scrubber */}
         <div className="space-y-1">
           <input
             type="range"

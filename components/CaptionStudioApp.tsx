@@ -118,9 +118,10 @@ export default function CaptionStudioApp() {
 
   // Style configuration state
   const [styleConfig, setStyleConfig] = useState<CaptionStyleConfig>(
-    DEFAULT_STYLE_PRESETS['hormozi-pop'].config
+    DEFAULT_STYLE_PRESETS['ae-behind-building'].config
   );
   const [activeStudioTab, setActiveStudioTab] = useState<'transcript' | 'style' | 'export'>('transcript');
+  const [styleCategoryFilter, setStyleCategoryFilter] = useState<'all' | 'cinematic-depth' | 'after-effects' | 'viral'>('all');
 
   // AI Transcription & Translation state (Groq Live Active Models)
   const [selectedLanguage, setSelectedLanguage] = useState<string>('hinglish');
@@ -408,7 +409,11 @@ export default function CaptionStudioApp() {
   };
 
   const handleApplyPreset = (presetKey: CaptionStylePreset) => {
-    setStyleConfig(DEFAULT_STYLE_PRESETS[presetKey].config);
+    const nextConfig = DEFAULT_STYLE_PRESETS[presetKey].config;
+    setStyleConfig(nextConfig);
+    if (cues.length > 0) {
+      setCues((prev) => regroupCuesByMaxWords(prev, nextConfig.maxWordsPerLine));
+    }
   };
 
   const handleAddCue = () => {
@@ -1116,9 +1121,9 @@ export default function CaptionStudioApp() {
               />
             </div>
 
-            {/* RIGHT PANEL (Cols 9-12): Animated Templates & Typography/Color Customizer */}
+            {/* RIGHT PANEL (Cols 9-12): After Effects Templates, Behind-Building Depth & Fine-Tune */}
             <div className="lg:col-span-3 bg-slate-50 rounded-2xl border border-slate-200 p-4 sm:p-5 flex flex-col justify-between space-y-5">
-              <div className="space-y-5">
+              <div className="space-y-4">
                 {/* Segmented Tab Control */}
                 <div
                   className="grid grid-cols-2 gap-1 p-1 bg-slate-200/70 rounded-xl"
@@ -1134,7 +1139,7 @@ export default function CaptionStudioApp() {
                         : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
-                    Animated Styles
+                    AE & 3D Styles (20)
                   </button>
                   <button
                     type="button"
@@ -1145,60 +1150,271 @@ export default function CaptionStudioApp() {
                         : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
-                    Fine-Tune & Export
+                    Fine-Tune & FX
                   </button>
                 </div>
 
                 {activeStudioTab !== 'export' ? (
-                  <div className="space-y-3">
-                    <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                      CaptionX Animated Templates
-                    </p>
-                    <div className="grid grid-cols-1 gap-2.5">
+                  <div className="space-y-3.5">
+                    {/* Dedicated Cinematic Behind-Building / Subject Crossing Feature Card */}
+                    <div className="p-3 rounded-xl bg-slate-900 text-white border border-slate-800 space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <span className="inline-block px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 text-[10px] font-black uppercase tracking-wider mb-0.5">
+                            CINEMATIC DEPTH FX
+                          </span>
+                          <p className="text-xs font-extrabold text-white">
+                            Behind Building / Subject Cross
+                          </p>
+                          <p className="text-[11px] text-slate-300 leading-tight">
+                            बिल्डिंग या सब्जेक्ट के पीछे से सिनेमैटिक फॉन्ट्स क्रॉस कराएं
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setStyleConfig((s) => ({
+                              ...s,
+                              depthBehindSubject: !s.depthBehindSubject,
+                              crossDirection:
+                                !s.depthBehindSubject && s.crossDirection === 'none'
+                                  ? 'left-to-right'
+                                  : s.crossDirection,
+                              fontSize:
+                                !s.depthBehindSubject && s.fontSize < 74
+                                  ? 88
+                                  : s.fontSize,
+                            }))
+                          }
+                          className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all shrink-0 ${
+                            styleConfig.depthBehindSubject
+                              ? 'bg-cyan-400 text-slate-950 shadow-sm'
+                              : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
+                          }`}
+                        >
+                          {styleConfig.depthBehindSubject ? 'ON · ACTIVE' : 'TURN ON'}
+                        </button>
+                      </div>
+
+                      {/* Crossing Direction & Building Matting Controls */}
+                      <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800">
+                        <div>
+                          <label
+                            htmlFor="cross-direction-select"
+                            className="block text-[10px] font-bold text-slate-300 mb-1"
+                          >
+                            Font Crossing Motion
+                          </label>
+                          <select
+                            id="cross-direction-select"
+                            value={styleConfig.crossDirection || 'left-to-right'}
+                            onChange={(e) =>
+                              setStyleConfig((s) => ({
+                                ...s,
+                                crossDirection:
+                                  e.target.value as CaptionStyleConfig['crossDirection'],
+                              }))
+                            }
+                            className="w-full px-2 py-1.5 text-[11px] font-bold bg-slate-800 text-white border border-slate-700 rounded-lg"
+                          >
+                            <option value="left-to-right">
+                              Left → Right Cross (बिल्डिंग पार)
+                            </option>
+                            <option value="right-to-left">
+                              Right → Left Cross (दाएं से बाएं)
+                            </option>
+                            <option value="rise-up">
+                              Skyline Rise Up (पीछे से ऊपर)
+                            </option>
+                            <option value="slow-zoom">
+                              3D Monument Zoom
+                            </option>
+                            <option value="none">Static Center</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label
+                            htmlFor="depth-mode-select"
+                            className="block text-[10px] font-bold text-slate-300 mb-1"
+                          >
+                            Foreground Cutout Mode
+                          </label>
+                          <select
+                            id="depth-mode-select"
+                            value={styleConfig.depthMode || 'auto-building-sky'}
+                            onChange={(e) =>
+                              setStyleConfig((s) => ({
+                                ...s,
+                                depthBehindSubject: true,
+                                depthMode:
+                                  e.target.value as CaptionStyleConfig['depthMode'],
+                              }))
+                            }
+                            className="w-full px-2 py-1.5 text-[11px] font-bold bg-slate-800 text-white border border-slate-700 rounded-lg"
+                          >
+                            <option value="auto-building-sky">
+                              Auto Building / Sky
+                            </option>
+                            <option value="dark-silhouette">
+                              Dark Building / Silhouette
+                            </option>
+                            <option value="center-portrait">
+                              Center Person / Tower
+                            </option>
+                            <option value="bright-subject">
+                              Lit Subject / Night
+                            </option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {styleConfig.depthBehindSubject && (
+                        <div className="space-y-2 pt-1">
+                          <div className="flex items-center justify-between text-[10px] font-semibold text-slate-300">
+                            <label htmlFor="depth-threshold-slider">
+                              Building Mask Sensitivity
+                            </label>
+                            <span className="font-mono text-cyan-300">
+                              {styleConfig.depthThreshold ?? 55}%
+                            </span>
+                          </div>
+                          <input
+                            id="depth-threshold-slider"
+                            type="range"
+                            min={15}
+                            max={90}
+                            value={styleConfig.depthThreshold ?? 55}
+                            onChange={(e) =>
+                              setStyleConfig((s) => ({
+                                ...s,
+                                depthThreshold: parseInt(e.target.value, 10),
+                              }))
+                            }
+                            className="w-full accent-cyan-400 h-1.5"
+                          />
+                          <div className="flex items-center justify-between text-[10px] font-semibold text-slate-300">
+                            <span>X-Ray Ghost Rim Through Building</span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setStyleConfig((s) => ({
+                                  ...s,
+                                  depthXrayOutline: !s.depthXrayOutline,
+                                }))
+                              }
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                styleConfig.depthXrayOutline
+                                  ? 'bg-cyan-500/30 text-cyan-200 border border-cyan-400/40'
+                                  : 'bg-slate-800 text-slate-400'
+                              }`}
+                            >
+                              {styleConfig.depthXrayOutline ? 'X-Ray ON' : 'Solid Hide'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Category Filter Pills for 20 After Effects & Viral Presets */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                          After Effects & 3D Presets
+                        </p>
+                        <span className="text-[11px] font-mono font-bold text-blue-600">
+                          20 Varieties
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1 bg-slate-200/70 p-1 rounded-lg">
+                        {[
+                          { id: 'all', label: 'All (20)' },
+                          { id: 'cinematic-depth', label: '3D Depth' },
+                          { id: 'after-effects', label: 'AE FX (12)' },
+                          { id: 'viral', label: 'Viral (6)' },
+                        ].map((cat) => (
+                          <button
+                            key={cat.id}
+                            type="button"
+                            onClick={() =>
+                              setStyleCategoryFilter(
+                                cat.id as typeof styleCategoryFilter
+                              )
+                            }
+                            className={`py-1 rounded-md text-[10px] font-bold transition-colors ${
+                              styleCategoryFilter === cat.id
+                                ? 'bg-white text-slate-950 shadow-xs'
+                                : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            {cat.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Scrollable 20 Preset Cards */}
+                    <div className="grid grid-cols-1 gap-2 max-h-[340px] overflow-y-auto pr-1">
                       {(
                         Object.keys(
                           DEFAULT_STYLE_PRESETS
                         ) as CaptionStylePreset[]
-                      ).map((key) => {
-                        const item = DEFAULT_STYLE_PRESETS[key];
-                        const isSelected = styleConfig.preset === key;
-                        return (
-                          <button
-                            key={key}
-                            type="button"
-                            onClick={() => handleApplyPreset(key)}
-                            className={`text-left p-3 rounded-xl border transition-all flex items-center justify-between gap-3 ${
-                              isSelected
-                                ? 'bg-blue-50/80 border-blue-600 ring-2 ring-blue-600/15'
-                                : 'bg-white border-slate-200 hover:border-slate-300'
-                            }`}
-                          >
-                            <div>
-                              <p className="text-xs font-bold text-slate-900">
-                                {item.name}
-                              </p>
-                              <p className="text-[11px] text-slate-500">
-                                {item.tagline}
-                              </p>
-                            </div>
-                            <span
-                              style={{
-                                color: item.config.activeWordColor,
-                                backgroundColor:
-                                  item.config.activeBgColor !== 'transparent'
-                                    ? item.config.activeBgColor
-                                    : '#0F172A',
-                              }}
-                              className="px-2.5 py-1 rounded-md text-[11px] font-black tracking-tight shrink-0"
+                      )
+                        .filter((key) => {
+                          if (styleCategoryFilter === 'all') return true;
+                          return (
+                            DEFAULT_STYLE_PRESETS[key].category ===
+                            styleCategoryFilter
+                          );
+                        })
+                        .map((key) => {
+                          const item = DEFAULT_STYLE_PRESETS[key];
+                          const isSelected = styleConfig.preset === key;
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => handleApplyPreset(key)}
+                              className={`text-left p-2.5 rounded-xl border transition-all flex items-center justify-between gap-2.5 ${
+                                isSelected
+                                  ? 'bg-blue-50/90 border-blue-600 ring-2 ring-blue-600/15'
+                                  : 'bg-white border-slate-200 hover:border-slate-300'
+                              }`}
                             >
-                              WORD
-                            </span>
-                          </button>
-                        );
-                      })}
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="px-1.5 py-0.5 rounded bg-slate-900 text-cyan-300 text-[9px] font-black tracking-wider uppercase shrink-0">
+                                    {item.badge}
+                                  </span>
+                                  <p className="text-xs font-bold text-slate-900 truncate">
+                                    {item.name}
+                                  </p>
+                                </div>
+                                <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
+                                  {item.tagline}
+                                </p>
+                              </div>
+                              <span
+                                style={{
+                                  color: item.config.activeWordColor,
+                                  backgroundColor:
+                                    item.config.activeBgColor !== 'transparent'
+                                      ? item.config.activeBgColor
+                                      : '#0F172A',
+                                  textShadow: item.config.glowBlur
+                                    ? `0 0 8px ${item.config.glowColor || item.config.activeWordColor}`
+                                    : undefined,
+                                }}
+                                className="px-2.5 py-1 rounded-md text-[11px] font-black tracking-tight shrink-0"
+                              >
+                                AE FX
+                              </span>
+                            </button>
+                          );
+                        })}
                     </div>
 
-                     {/* Continuous Caption Height Pointer Slider Line (Right = Up, Left = Down) */}
+                    {/* Continuous Caption Height Pointer Slider Line (Right = Up, Left = Down) */}
                     <div className="pt-2 border-t border-slate-200 space-y-1.5">
                       <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
                         <label htmlFor="quick-pointer-line">
@@ -1242,8 +1458,8 @@ export default function CaptionStudioApp() {
                           {styleConfig.maxWordsPerLine} words
                         </span>
                       </div>
-                      <div className="grid grid-cols-5 gap-1.5">
-                        {[2, 3, 4, 5, 6].map((n) => (
+                      <div className="grid grid-cols-6 gap-1">
+                        {[1, 2, 3, 4, 5, 6].map((n) => (
                           <button
                             key={n}
                             type="button"
@@ -1261,13 +1477,13 @@ export default function CaptionStudioApp() {
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-3.5 max-h-[520px] overflow-y-auto pr-1">
                     <div>
                       <label
                         htmlFor="style-font-family"
                         className="block text-xs font-bold text-slate-700 mb-1"
                       >
-                        Font Family
+                        After Effects & Cinema Font Family (10 Fonts)
                       </label>
                       <select
                         id="style-font-family"
@@ -1281,6 +1497,24 @@ export default function CaptionStudioApp() {
                         }
                         className="w-full px-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-lg"
                       >
+                        <option value="Bebas Neue">
+                          Bebas Neue (Tall Monument / Skyline Poster)
+                        </option>
+                        <option value="Anton">
+                          Anton (Heavy Block Impact / 3D Extrude)
+                        </option>
+                        <option value="Montserrat">
+                          Montserrat Black (Modern Viral / Saber)
+                        </option>
+                        <option value="Cinzel">
+                          Cinzel Decorative (Hollywood Trailer Serif)
+                        </option>
+                        <option value="Orbitron">
+                          Orbitron (Cyberpunk Sci-Fi HUD)
+                        </option>
+                        <option value="Oswald">
+                          Oswald Heavy (Condensed Action)
+                        </option>
                         <option value="Plus Jakarta Sans">
                           Plus Jakarta Sans (Bold Geometric)
                         </option>
@@ -1288,17 +1522,60 @@ export default function CaptionStudioApp() {
                           Arial Black (Heavy Reels Display)
                         </option>
                         <option value="Fraunces">
-                          Fraunces (Editorial Serif)
+                          Fraunces (Luxury Editorial Serif)
                         </option>
                         <option value="JetBrains Mono">
-                          JetBrains Mono (Technical)
+                          JetBrains Mono (Terminal Typewriter)
                         </option>
                       </select>
                     </div>
 
                     <div>
+                      <label
+                        htmlFor="style-animation-engine"
+                        className="block text-xs font-bold text-slate-700 mb-1"
+                      >
+                        After Effects Motion Engine
+                      </label>
+                      <select
+                        id="style-animation-engine"
+                        value={styleConfig.animationStyle || 'pop'}
+                        onChange={(e) =>
+                          setStyleConfig((s) => ({
+                            ...s,
+                            animationStyle:
+                              e.target.value as CaptionStyleConfig['animationStyle'],
+                          }))
+                        }
+                        className="w-full px-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-lg"
+                      >
+                        <option value="cinematic-pan">
+                          Cinematic Tracking Pan (Behind Building)
+                        </option>
+                        <option value="pop">Hormozi Elastic Pop</option>
+                        <option value="whip-slide">
+                          AE Whip-Pan Upward Slide
+                        </option>
+                        <option value="stomp">AE Bass Shake & Slam</option>
+                        <option value="glitch">
+                          AE RGB Chromatic Split Glitch
+                        </option>
+                        <option value="flicker">
+                          AE Saber Neon Electric Flicker
+                        </option>
+                        <option value="wave">AE Sine Wave Float</option>
+                        <option value="typewriter">
+                          AE Terminal Typewriter Reveal
+                        </option>
+                        <option value="karaoke">Smooth Karaoke Fill</option>
+                      </select>
+                    </div>
+
+                    <div>
                       <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1">
-                        <label htmlFor="style-font-size">Font Size</label>
+                        <label htmlFor="style-font-size">
+                          Font Scale (Monument Size up to 110px)
+                        </label>
                         <span className="font-mono tabular-nums">
                           {styleConfig.fontSize}px
                         </span>
@@ -1307,7 +1584,7 @@ export default function CaptionStudioApp() {
                         id="style-font-size"
                         type="range"
                         min={28}
-                        max={76}
+                        max={110}
                         value={styleConfig.fontSize}
                         onChange={(e) =>
                           setStyleConfig((s) => ({
@@ -1317,6 +1594,103 @@ export default function CaptionStudioApp() {
                         }
                         className="w-full accent-blue-600"
                       />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <div className="flex justify-between text-[11px] font-semibold text-slate-700 mb-1">
+                          <label htmlFor="style-extrude">3D Extrude</label>
+                          <span className="font-mono">
+                            {styleConfig.extrudeDepth ?? 0}px
+                          </span>
+                        </div>
+                        <input
+                          id="style-extrude"
+                          type="range"
+                          min={0}
+                          max={14}
+                          value={styleConfig.extrudeDepth ?? 0}
+                          onChange={(e) =>
+                            setStyleConfig((s) => ({
+                              ...s,
+                              extrudeDepth: parseInt(e.target.value, 10),
+                            }))
+                          }
+                          className="w-full accent-blue-600"
+                        />
+                      </div>
+
+                      <div>
+                        <div className="flex justify-between text-[11px] font-semibold text-slate-700 mb-1">
+                          <label htmlFor="style-glow">Saber Glow</label>
+                          <span className="font-mono">
+                            {styleConfig.glowBlur ?? 0}px
+                          </span>
+                        </div>
+                        <input
+                          id="style-glow"
+                          type="range"
+                          min={0}
+                          max={40}
+                          value={styleConfig.glowBlur ?? 0}
+                          onChange={(e) =>
+                            setStyleConfig((s) => ({
+                              ...s,
+                              glowBlur: parseInt(e.target.value, 10),
+                            }))
+                          }
+                          className="w-full accent-blue-600"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <div className="flex justify-between text-[11px] font-semibold text-slate-700 mb-1">
+                          <label htmlFor="style-tracking">Letter Spacing</label>
+                          <span className="font-mono">
+                            {styleConfig.letterSpacing ?? 0}px
+                          </span>
+                        </div>
+                        <input
+                          id="style-tracking"
+                          type="range"
+                          min={0}
+                          max={14}
+                          value={styleConfig.letterSpacing ?? 0}
+                          onChange={(e) =>
+                            setStyleConfig((s) => ({
+                              ...s,
+                              letterSpacing: parseInt(e.target.value, 10),
+                            }))
+                          }
+                          className="w-full accent-blue-600"
+                        />
+                      </div>
+
+                      <div>
+                        <div className="flex justify-between text-[11px] font-semibold text-slate-700 mb-1">
+                          <label htmlFor="style-cross-speed">Cross Speed</label>
+                          <span className="font-mono">
+                            {(styleConfig.crossSpeed ?? 1.0).toFixed(1)}x
+                          </span>
+                        </div>
+                        <input
+                          id="style-cross-speed"
+                          type="range"
+                          min={0.3}
+                          max={2.2}
+                          step={0.1}
+                          value={styleConfig.crossSpeed ?? 1.0}
+                          onChange={(e) =>
+                            setStyleConfig((s) => ({
+                              ...s,
+                              crossSpeed: parseFloat(e.target.value),
+                            }))
+                          }
+                          className="w-full accent-blue-600"
+                        />
+                      </div>
                     </div>
 
                     <div>
@@ -1346,13 +1720,13 @@ export default function CaptionStudioApp() {
                       />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-3 gap-2">
                       <div>
                         <label
                           htmlFor="style-text-color"
-                          className="block text-[11px] font-bold text-slate-700 mb-1"
+                          className="block text-[10px] font-bold text-slate-700 mb-1"
                         >
-                          Base Text Color
+                          Base Color
                         </label>
                         <input
                           id="style-text-color"
@@ -1368,15 +1742,15 @@ export default function CaptionStudioApp() {
                               textColor: e.target.value,
                             }))
                           }
-                          className="w-full h-9 rounded-lg border border-slate-200 cursor-pointer bg-white p-1"
+                          className="w-full h-8 rounded-lg border border-slate-200 cursor-pointer bg-white p-0.5"
                         />
                       </div>
                       <div>
                         <label
                           htmlFor="style-active-color"
-                          className="block text-[11px] font-bold text-slate-700 mb-1"
+                          className="block text-[10px] font-bold text-slate-700 mb-1"
                         >
-                          Active Word Color
+                          Active Word
                         </label>
                         <input
                           id="style-active-color"
@@ -1384,7 +1758,7 @@ export default function CaptionStudioApp() {
                           value={
                             styleConfig.activeWordColor.startsWith('#')
                               ? styleConfig.activeWordColor
-                              : '#FACC15'
+                              : '#38BDF8'
                           }
                           onChange={(e) =>
                             setStyleConfig((s) => ({
@@ -1392,15 +1766,54 @@ export default function CaptionStudioApp() {
                               activeWordColor: e.target.value,
                             }))
                           }
-                          className="w-full h-9 rounded-lg border border-slate-200 cursor-pointer bg-white p-1"
+                          className="w-full h-8 rounded-lg border border-slate-200 cursor-pointer bg-white p-0.5"
+                        />
+                      </div>
+                      <div>
+                        <label
+                          htmlFor="style-glow-color"
+                          className="block text-[10px] font-bold text-slate-700 mb-1"
+                        >
+                          Glow / Rim
+                        </label>
+                        <input
+                          id="style-glow-color"
+                          type="color"
+                          value={
+                            (styleConfig.glowColor || '#0284C7').startsWith('#')
+                              ? styleConfig.glowColor || '#0284C7'
+                              : '#0284C7'
+                          }
+                          onChange={(e) =>
+                            setStyleConfig((s) => ({
+                              ...s,
+                              glowColor: e.target.value,
+                            }))
+                          }
+                          className="w-full h-8 rounded-lg border border-slate-200 cursor-pointer bg-white p-0.5"
                         />
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-200">
-                      <span className="text-xs font-semibold text-slate-700">
-                        All-Caps Display
-                      </span>
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-200 gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setStyleConfig((s) => ({
+                            ...s,
+                            hollowInactive: !s.hollowInactive,
+                          }))
+                        }
+                        className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold transition-colors ${
+                          styleConfig.hollowInactive
+                            ? 'bg-slate-900 text-cyan-300'
+                            : 'bg-slate-200 text-slate-700'
+                        }`}
+                      >
+                        {styleConfig.hollowInactive
+                          ? 'Hollow Stroke ON'
+                          : 'Solid Fill Words'}
+                      </button>
                       <button
                         type="button"
                         onClick={() =>
@@ -1409,7 +1822,7 @@ export default function CaptionStudioApp() {
                             uppercase: !s.uppercase,
                           }))
                         }
-                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
+                        className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold transition-colors ${
                           styleConfig.uppercase
                             ? 'bg-blue-600 text-white'
                             : 'bg-slate-200 text-slate-700'
