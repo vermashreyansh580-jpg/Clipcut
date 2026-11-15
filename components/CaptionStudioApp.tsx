@@ -5,6 +5,9 @@ import {
   CaptionCue,
   CaptionStyleConfig,
   CaptionStylePreset,
+  VideoEditConfig,
+  VideoColorFilterPreset,
+  DEFAULT_VIDEO_EDIT_CONFIG,
   DEFAULT_STYLE_PRESETS,
   parseSubtitleFile,
   exportToSrt,
@@ -22,6 +25,8 @@ import {
   yPositionToSliderValue,
   DEMO_SHOWCASE_DURATION,
   getDemoShowcaseCues,
+  applyDynamicPositionPresetToCues,
+  resolveCuePlacement,
 } from '@/lib/subtitles';
 import CaptionCanvasPlayer from './CaptionCanvasPlayer';
 import FreeToolsHub, { ToolId } from './FreeToolsHub';
@@ -121,11 +126,15 @@ export default function CaptionStudioApp() {
   const [duration, setDuration] = useState<number>(DEMO_SHOWCASE_DURATION);
   const [aspectRatio, setAspectRatio] = useState<'9:16' | '16:9' | '1:1'>('9:16');
 
-  // Style configuration state
+  // Style configuration state & Video Editing state
   const [styleConfig, setStyleConfig] = useState<CaptionStyleConfig>(
     DEFAULT_STYLE_PRESETS['creator-obstacle-weave'].config
   );
-  const [activeStudioTab, setActiveStudioTab] = useState<'transcript' | 'style' | 'export'>('transcript');
+  const [videoEditConfig, setVideoEditConfig] = useState<VideoEditConfig>(
+    DEFAULT_VIDEO_EDIT_CONFIG
+  );
+  const [dragScope, setDragScope] = useState<'all-cues' | 'current-cue'>('all-cues');
+  const [activeStudioTab, setActiveStudioTab] = useState<'style' | 'video-edit' | 'export'>('style');
   const [styleCategoryFilter, setStyleCategoryFilter] = useState<'all' | 'creator-pro' | 'cinematic-depth' | 'kinetic-fx' | 'viral'>('all');
 
   // AI Transcription & Translation state (Groq Live Active Models)
@@ -481,7 +490,7 @@ export default function CaptionStudioApp() {
 
   const handleUpdateCue = (
     idx: number,
-    patch: Partial<{ start: number; end: number; text: string }>
+    patch: Partial<CaptionCue>
   ) => {
     setCues((prev) =>
       prev.map((c, i) => {
@@ -492,13 +501,88 @@ export default function CaptionStudioApp() {
         const text = patch.text !== undefined ? patch.text : c.text;
         return {
           ...c,
+          ...patch,
           start,
           end,
           text,
-          words: computeWordTimings(text, start, end),
+          words:
+            patch.text !== undefined ||
+            patch.start !== undefined ||
+            patch.end !== undefined
+              ? computeWordTimings(text, start, end)
+              : c.words,
         };
       })
     );
+  };
+
+  const handleUpdateCueById = (cueId: string, patch: Partial<CaptionCue>) => {
+    setCues((prev) =>
+      prev.map((c) => {
+        if (c.id !== cueId) return c;
+        return {
+          ...c,
+          ...patch,
+        };
+      })
+    );
+  };
+
+  const handleApplyCreatorLayoutPreset = (
+    preset:
+      | 'hook-top-body-bottom'
+      | 'hook-center-body-bottom'
+      | 'alternating-zones'
+      | 'all-top'
+      | 'all-center'
+      | 'all-bottom'
+      | 'reset-custom'
+  ) => {
+    setCues((prev) => applyDynamicPositionPresetToCues(prev, preset));
+    if (
+      preset === 'hook-top-body-bottom' ||
+      preset === 'hook-center-body-bottom' ||
+      preset === 'alternating-zones'
+    ) {
+      setStyleConfig((s) => ({ ...s, dynamicLayoutMode: preset }));
+    } else if (preset === 'all-top') {
+      setStyleConfig((s) => ({
+        ...s,
+        yPosition: 20,
+        dynamicLayoutMode: 'custom',
+      }));
+    } else if (preset === 'all-center') {
+      setStyleConfig((s) => ({
+        ...s,
+        yPosition: 50,
+        dynamicLayoutMode: 'custom',
+      }));
+    } else if (preset === 'all-bottom') {
+      setStyleConfig((s) => ({
+        ...s,
+        yPosition: 78,
+        dynamicLayoutMode: 'custom',
+      }));
+    } else {
+      setStyleConfig((s) => ({
+        ...s,
+        dynamicLayoutMode: 'custom',
+      }));
+    }
+
+    const labelMap: Record<typeof preset, string> = {
+      'hook-top-body-bottom':
+        'Creator Hook Layout Applied: शुरू का कैप्शन ऊपर (Top 20% + 1.18x Big Hook) और बाकी कैप्शन नीचे (Bottom 78%) सेट कर दिए गए हैं!',
+      'hook-center-body-bottom':
+        'Creator Center Hook Applied: शुरू का कैप्शन बीच में (Center 48%) और बाकी कैप्शन नीचे (Bottom 78%) सेट कर दिए गए हैं!',
+      'alternating-zones':
+        'Dynamic Alternating Layout Applied: हर कैप्शन अलग ज़ोन (ऊपर / बीच में / नीचे) में अपने आप सेट हो गया है!',
+      'all-top': 'All Captions moved to Top (ऊपर 20%)!',
+      'all-center': 'All Captions moved to Center (बीच में 50%)!',
+      'all-bottom': 'All Captions moved to Bottom (नीचे 78%)!',
+      'reset-custom': 'Per-cue custom positions reset to global pointer slider.',
+    };
+    setTranscribeStatus(labelMap[preset]);
   };
 
   const handleDeleteCue = (idx: number) => {
@@ -1055,6 +1139,92 @@ export default function CaptionStudioApp() {
                   </div>
                 </div>
 
+                {/* Creator Caption Pacing & Dynamic Position Presets (शुरू में ऊपर · बाकी नीचे / Custom) */}
+                <div className="bg-slate-900 text-white p-3 rounded-xl border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-400">
+                        CREATOR CAPTION PLACEMENT
+                      </span>
+                      <p className="text-xs font-bold text-white">
+                        शुरू में कैप्शन ऊपर या अपने हिसाब से सेट करें
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleApplyCreatorLayoutPreset('reset-custom')}
+                      className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] font-semibold text-slate-300 border border-slate-700"
+                    >
+                      Reset
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleApplyCreatorLayoutPreset('hook-top-body-bottom')
+                      }
+                      className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-left border transition-all ${
+                        styleConfig.dynamicLayoutMode === 'hook-top-body-bottom'
+                          ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-xs'
+                          : 'bg-slate-800/90 text-slate-200 hover:bg-slate-800 border-slate-700'
+                      }`}
+                    >
+                      🔥 शुरू में ऊपर · बाकी नीचे (Hook Top)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleApplyCreatorLayoutPreset('hook-center-body-bottom')
+                      }
+                      className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-left border transition-all ${
+                        styleConfig.dynamicLayoutMode === 'hook-center-body-bottom'
+                          ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-xs'
+                          : 'bg-slate-800/90 text-slate-200 hover:bg-slate-800 border-slate-700'
+                      }`}
+                    >
+                      ⚡ शुरू में बीच · बाकी नीचे (Center Hook)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleApplyCreatorLayoutPreset('alternating-zones')
+                      }
+                      className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-left border transition-all ${
+                        styleConfig.dynamicLayoutMode === 'alternating-zones'
+                          ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-xs'
+                          : 'bg-slate-800/90 text-slate-200 hover:bg-slate-800 border-slate-700'
+                      }`}
+                    >
+                      🎯 Alternating (ऊपर / बीच / नीचे)
+                    </button>
+                    <div className="grid grid-cols-3 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleApplyCreatorLayoutPreset('all-top')}
+                        className="px-1.5 py-1.5 rounded-lg text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-center"
+                      >
+                        सब ऊपर
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleApplyCreatorLayoutPreset('all-center')}
+                        className="px-1.5 py-1.5 rounded-lg text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-center"
+                      >
+                        सब बीच
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleApplyCreatorLayoutPreset('all-bottom')}
+                        className="px-1.5 py-1.5 rounded-lg text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-center"
+                      >
+                        सब नीचे
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Cue List Header */}
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
@@ -1103,10 +1273,17 @@ export default function CaptionStudioApp() {
                     </div>
                   </div>
                 ) : (
-                  <div className="max-h-[380px] overflow-y-auto space-y-2.5 pr-1">
+                  <div className="max-h-[370px] overflow-y-auto space-y-2.5 pr-1">
                     {cues.map((cue, idx) => {
                       const isCurrent =
                         currentTime >= cue.start && currentTime <= cue.end;
+                      const resolved = resolveCuePlacement(cue, idx, styleConfig);
+                      const zoneBadge =
+                        resolved.yPosition <= 32
+                          ? 'TOP · ऊपर'
+                          : resolved.yPosition <= 62
+                            ? 'MID · बीच'
+                            : 'BOT · नीचे';
                       return (
                         <div
                           key={cue.id}
@@ -1134,7 +1311,7 @@ export default function CaptionStudioApp() {
                                     start: parseFloat(e.target.value) || 0,
                                   })
                                 }
-                                className="w-16 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-slate-800"
+                                className="w-15 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-slate-800"
                               />
                               <span>→</span>
                               <input
@@ -1149,9 +1326,11 @@ export default function CaptionStudioApp() {
                                     end: parseFloat(e.target.value) || 1,
                                   })
                                 }
-                                className="w-16 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-slate-800"
+                                className="w-15 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-slate-800"
                               />
-                              <span>s</span>
+                              <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-sans font-bold text-[9px]">
+                                {zoneBadge}
+                              </span>
                             </div>
 
                             <button
@@ -1177,6 +1356,85 @@ export default function CaptionStudioApp() {
                             }
                             className="w-full px-2.5 py-1.5 text-xs font-medium bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900"
                           />
+
+                          {/* Per-Cue Custom Position & Scale Controls */}
+                          <div
+                            className="flex flex-wrap items-center justify-between gap-1 pt-0.5"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="flex items-center gap-1">
+                              {[
+                                { label: 'ऊपर Top', y: 20 },
+                                { label: 'बीच Mid', y: 50 },
+                                { label: 'नीचे Bot', y: 78 },
+                              ].map((pos) => {
+                                const isActivePos =
+                                  Math.abs(resolved.yPosition - pos.y) <= 8;
+                                return (
+                                  <button
+                                    key={pos.label}
+                                    type="button"
+                                    onClick={() =>
+                                      handleUpdateCue(idx, { yPosition: pos.y })
+                                    }
+                                    className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors ${
+                                      isActivePos
+                                        ? 'bg-blue-600 text-white border-blue-600'
+                                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                                    }`}
+                                  >
+                                    {pos.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleUpdateCue(idx, {
+                                    fontSizeScale:
+                                      (cue.fontSizeScale ?? 1) > 1.08 ? 1 : 1.2,
+                                  })
+                                }
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors ${
+                                  resolved.fontSizeScale > 1.08
+                                    ? 'bg-amber-500 text-slate-950 border-amber-500'
+                                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                                }`}
+                                title="Make this specific cue 1.2x bigger for a viral hook"
+                              >
+                                1.2x Hook
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextDepth =
+                                    cue.depthOverride === 'behind'
+                                      ? 'front'
+                                      : cue.depthOverride === 'front'
+                                        ? 'auto'
+                                        : 'behind';
+                                  handleUpdateCue(idx, {
+                                    depthOverride: nextDepth,
+                                  });
+                                }}
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors ${
+                                  cue.depthOverride && cue.depthOverride !== 'auto'
+                                    ? 'bg-cyan-600 text-white border-cyan-600'
+                                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                                }`}
+                                title="Set whether this cue passes behind obstacles or stays in front"
+                              >
+                                {cue.depthOverride === 'behind'
+                                  ? 'पीछे Behind'
+                                  : cue.depthOverride === 'front'
+                                    ? 'आगे Front'
+                                    : '3D Auto'}
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       );
                     })}
@@ -1213,9 +1471,13 @@ export default function CaptionStudioApp() {
                 mediaFileName={mediaFileName}
                 cues={cues}
                 styleConfig={styleConfig}
+                videoEditConfig={videoEditConfig}
                 onPositionChange={(patch) =>
                   setStyleConfig((s) => ({ ...s, ...patch }))
                 }
+                onUpdateCuePlacement={handleUpdateCueById}
+                dragScope={dragScope}
+                onDragScopeChange={setDragScope}
                 aspectRatio={aspectRatio}
                 onAspectRatioChange={setAspectRatio}
                 currentTime={currentTime}
@@ -1226,40 +1488,51 @@ export default function CaptionStudioApp() {
               />
             </div>
 
-            {/* RIGHT PANEL (Cols 9-12): After Effects Templates, Behind-Building Depth & Fine-Tune */}
+            {/* RIGHT PANEL (Cols 9-12): 30+ Kinetic Styles, Video Editor & Fine-Tune */}
             <div className="lg:col-span-3 bg-slate-50 rounded-2xl border border-slate-200 p-4 sm:p-5 flex flex-col justify-between space-y-5">
               <div className="space-y-4">
-                {/* Segmented Tab Control */}
+                {/* 3-Tab Segmented Control: Styles (30) · Video Edit · Fine-Tune */}
                 <div
-                  className="grid grid-cols-2 gap-1 p-1 bg-slate-200/70 rounded-xl"
+                  className="grid grid-cols-3 gap-1 p-1 bg-slate-200/70 rounded-xl"
                   role="group"
-                  aria-label="Style customization tabs"
+                  aria-label="Style and video editing tabs"
                 >
                   <button
                     type="button"
                     onClick={() => setActiveStudioTab('style')}
-                    className={`py-1.5 text-xs font-bold rounded-lg transition-colors ${
-                      activeStudioTab !== 'export'
+                    className={`py-1.5 text-[11px] font-bold rounded-lg transition-colors ${
+                      activeStudioTab === 'style'
                         ? 'bg-white text-slate-900 shadow-xs'
                         : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
-                    3D & Kinetic Styles (30)
+                    Styles (30)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveStudioTab('video-edit')}
+                    className={`py-1.5 text-[11px] font-bold rounded-lg transition-colors ${
+                      activeStudioTab === 'video-edit'
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'text-slate-700 hover:text-slate-900'
+                    }`}
+                  >
+                    Video Edit ✂️
                   </button>
                   <button
                     type="button"
                     onClick={() => setActiveStudioTab('export')}
-                    className={`py-1.5 text-xs font-bold rounded-lg transition-colors ${
+                    className={`py-1.5 text-[11px] font-bold rounded-lg transition-colors ${
                       activeStudioTab === 'export'
                         ? 'bg-white text-slate-900 shadow-xs'
                         : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
-                    Fine-Tune & FX
+                    Fine-Tune
                   </button>
                 </div>
 
-                {activeStudioTab !== 'export' ? (
+                {activeStudioTab === 'style' ? (
                   <div className="space-y-3.5">
                     {/* Dedicated Creator 3D Obstacle Weave (Kuch Piche, Kuch Aage) Card */}
                     <div className="p-3 rounded-xl bg-slate-900 text-white border border-slate-800 space-y-2.5">
@@ -1619,6 +1892,491 @@ export default function CaptionStudioApp() {
                             {n}w
                           </button>
                         ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : activeStudioTab === 'video-edit' ? (
+                  <div className="space-y-3.5 max-h-[540px] overflow-y-auto pr-1">
+                    {/* 1. Creator Dynamic Caption Placement (शुरू में ऊपर · बाकी नीचे) */}
+                    <div className="p-3 rounded-xl bg-slate-900 text-white border border-slate-800 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="inline-block px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[9px] font-black uppercase tracking-wider">
+                            CAPTION PACING EDITOR
+                          </span>
+                          <p className="text-xs font-extrabold text-white">
+                            शुरू में ऊपर · बाकी नीचे या कस्टम पोज़िशन
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDragScope((d) =>
+                              d === 'all-cues' ? 'current-cue' : 'all-cues'
+                            )
+                          }
+                          className={`px-2 py-1 rounded text-[10px] font-bold ${
+                            dragScope === 'current-cue'
+                              ? 'bg-amber-400 text-slate-950'
+                              : 'bg-slate-800 text-slate-200 border border-slate-700'
+                          }`}
+                        >
+                          {dragScope === 'current-cue'
+                            ? 'Drag: Current Cue'
+                            : 'Drag: All Cues'}
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleApplyCreatorLayoutPreset('hook-top-body-bottom')
+                          }
+                          className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-left border transition-all ${
+                            styleConfig.dynamicLayoutMode ===
+                            'hook-top-body-bottom'
+                              ? 'bg-amber-400 text-slate-950 border-amber-300'
+                              : 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
+                          }`}
+                        >
+                          🔥 शुरू का कैप्शन ऊपर (Top 20%) · बाकी नीचे (Bottom 78%)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleApplyCreatorLayoutPreset('hook-center-body-bottom')
+                          }
+                          className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-left border transition-all ${
+                            styleConfig.dynamicLayoutMode ===
+                            'hook-center-body-bottom'
+                              ? 'bg-amber-400 text-slate-950 border-amber-300'
+                              : 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
+                          }`}
+                        >
+                          ⚡ शुरू का कैप्शन बीच में (Center) · बाकी नीचे
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleApplyCreatorLayoutPreset('alternating-zones')
+                          }
+                          className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-left border transition-all ${
+                            styleConfig.dynamicLayoutMode === 'alternating-zones'
+                              ? 'bg-amber-400 text-slate-950 border-amber-300'
+                              : 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
+                          }`}
+                        >
+                          🎯 Alternating Zones (Line 1 ऊपर · Line 2 बीच · Line 3 नीचे)
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 2. Video Trim & Cut (वीडियो ट्रिम / कट करें) */}
+                    <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                          <Scissors className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Video Trim & Cut (वीडियो कट करें)</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setVideoEditConfig((v) => ({
+                              ...v,
+                              trimStart: 0,
+                              trimEnd: 0,
+                            }))
+                          }
+                          className="text-[10px] font-bold text-blue-600 hover:underline"
+                        >
+                          Reset Trim
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <label
+                            htmlFor="video-trim-start"
+                            className="block text-[10px] font-semibold text-slate-600"
+                          >
+                            Start Time (sec)
+                          </label>
+                          <div className="flex items-center gap-1">
+                            <input
+                              id="video-trim-start"
+                              type="number"
+                              min={0}
+                              max={Math.max(0.5, duration - 0.5)}
+                              step={0.1}
+                              value={videoEditConfig.trimStart}
+                              onChange={(e) =>
+                                setVideoEditConfig((v) => ({
+                                  ...v,
+                                  trimStart: Math.max(
+                                    0,
+                                    parseFloat(e.target.value) || 0
+                                  ),
+                                }))
+                              }
+                              className="w-full px-2 py-1 text-xs font-mono bg-slate-50 border border-slate-200 rounded-lg"
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setVideoEditConfig((v) => ({
+                                  ...v,
+                                  trimStart: Number(currentTime.toFixed(1)),
+                                }))
+                              }
+                              className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-[10px] font-bold text-slate-700 shrink-0"
+                              title="Set trim start to current playhead time"
+                            >
+                              Set Now
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label
+                            htmlFor="video-trim-end"
+                            className="block text-[10px] font-semibold text-slate-600"
+                          >
+                            End Time (0 = Full)
+                          </label>
+                          <div className="flex items-center gap-1">
+                            <input
+                              id="video-trim-end"
+                              type="number"
+                              min={0}
+                              max={Math.max(1, duration)}
+                              step={0.1}
+                              value={videoEditConfig.trimEnd}
+                              onChange={(e) =>
+                                setVideoEditConfig((v) => ({
+                                  ...v,
+                                  trimEnd: Math.max(
+                                    0,
+                                    parseFloat(e.target.value) || 0
+                                  ),
+                                }))
+                              }
+                              className="w-full px-2 py-1 text-xs font-mono bg-slate-50 border border-slate-200 rounded-lg"
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setVideoEditConfig((v) => ({
+                                  ...v,
+                                  trimEnd: Number(currentTime.toFixed(1)),
+                                }))
+                              }
+                              className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-[10px] font-bold text-slate-700 shrink-0"
+                              title="Set trim end to current playhead time"
+                            >
+                              Set Now
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 3. Camera Zoom, Pan & Auto Jump-Cut Zoom (कैमरा ज़ूम और जंप-कट) */}
+                    <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-900">
+                          Camera Framing & Jump-Cut Zoom
+                        </span>
+                        <span className="text-[11px] font-mono font-bold text-blue-600">
+                          {Math.round(videoEditConfig.zoom * 100)}%
+                        </span>
+                      </div>
+
+                      <div>
+                        <input
+                          type="range"
+                          aria-label="Video camera zoom"
+                          min={100}
+                          max={200}
+                          step={2}
+                          value={Math.round(videoEditConfig.zoom * 100)}
+                          onChange={(e) =>
+                            setVideoEditConfig((v) => ({
+                              ...v,
+                              zoom: parseInt(e.target.value, 10) / 100,
+                            }))
+                          }
+                          className="w-full accent-blue-600"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <div className="flex justify-between text-[10px] font-semibold text-slate-600 mb-0.5">
+                            <label htmlFor="video-pan-x">Pan Left/Right</label>
+                            <span className="font-mono">{videoEditConfig.panX}%</span>
+                          </div>
+                          <input
+                            id="video-pan-x"
+                            type="range"
+                            min={-40}
+                            max={40}
+                            value={videoEditConfig.panX}
+                            onChange={(e) =>
+                              setVideoEditConfig((v) => ({
+                                ...v,
+                                panX: parseInt(e.target.value, 10),
+                              }))
+                            }
+                            className="w-full accent-blue-600"
+                          />
+                        </div>
+                        <div>
+                          <div className="flex justify-between text-[10px] font-semibold text-slate-600 mb-0.5">
+                            <label htmlFor="video-pan-y">Pan Up/Down</label>
+                            <span className="font-mono">{videoEditConfig.panY}%</span>
+                          </div>
+                          <input
+                            id="video-pan-y"
+                            type="range"
+                            min={-40}
+                            max={40}
+                            value={videoEditConfig.panY}
+                            onChange={(e) =>
+                              setVideoEditConfig((v) => ({
+                                ...v,
+                                panY: parseInt(e.target.value, 10),
+                              }))
+                            }
+                            className="w-full accent-blue-600"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-1.5 pt-1">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setVideoEditConfig((v) => ({
+                              ...v,
+                              autoJumpCutZoom: !v.autoJumpCutZoom,
+                            }))
+                          }
+                          className={`py-1.5 px-2 rounded-lg text-[10px] font-bold border transition-all ${
+                            videoEditConfig.autoJumpCutZoom
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          {videoEditConfig.autoJumpCutZoom
+                            ? '⚡ Auto Jump-Cut: ON'
+                            : '⚡ Auto Jump-Cut Zoom'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setVideoEditConfig((v) => ({
+                              ...v,
+                              mirrorHorizontal: !v.mirrorHorizontal,
+                            }))
+                          }
+                          className={`py-1.5 px-2 rounded-lg text-[10px] font-bold border transition-all ${
+                            videoEditConfig.mirrorHorizontal
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          {videoEditConfig.mirrorHorizontal
+                            ? '↔ Mirror Flip: ON'
+                            : '↔ Mirror Flip Video'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 4. Playback Speed (वीडियो स्पीड) */}
+                    <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-900">
+                          Video Playback Speed (स्पीड)
+                        </span>
+                        <span className="text-[11px] font-mono font-bold text-blue-600">
+                          {videoEditConfig.playbackRate}x
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-6 gap-1">
+                        {[0.5, 0.75, 1, 1.25, 1.5, 2].map((spd) => (
+                          <button
+                            key={spd}
+                            type="button"
+                            onClick={() =>
+                              setVideoEditConfig((v) => ({
+                                ...v,
+                                playbackRate: spd,
+                              }))
+                            }
+                            className={`py-1.5 rounded-lg text-[11px] font-mono font-bold border transition-colors ${
+                              videoEditConfig.playbackRate === spd
+                                ? 'bg-blue-600 text-white border-blue-600'
+                                : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            {spd}x
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 5. Color Grading Presets & Lens FX (कलर ग्रेडिंग और फिल्टर) */}
+                    <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-900">
+                          Cinema Color Grading & FX
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setVideoEditConfig(DEFAULT_VIDEO_EDIT_CONFIG)
+                          }
+                          className="text-[10px] font-bold text-rose-600 hover:underline"
+                        >
+                          Reset All Edits
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {(
+                          [
+                            { id: 'none', label: 'Original' },
+                            { id: 'viral-crisp', label: 'Viral Crisp' },
+                            { id: 'cinema-teal-gold', label: 'Teal & Gold' },
+                            { id: 'moody-matte', label: 'Moody Matte' },
+                            { id: 'warm-glow', label: 'Warm Glow' },
+                            { id: 'bw-docu', label: 'B&W Docu' },
+                          ] as Array<{ id: VideoColorFilterPreset; label: string }>
+                        ).map((preset) => (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            onClick={() =>
+                              setVideoEditConfig((v) => ({
+                                ...v,
+                                colorPreset: preset.id,
+                              }))
+                            }
+                            className={`py-1.5 px-2 rounded-lg text-[10px] font-bold border transition-colors ${
+                              videoEditConfig.colorPreset === preset.id
+                                ? 'bg-slate-900 text-cyan-300 border-slate-900'
+                                : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 pt-1">
+                        <div>
+                          <div className="flex justify-between text-[10px] font-semibold text-slate-600">
+                            <label htmlFor="vid-bright">Bright</label>
+                            <span className="font-mono">{videoEditConfig.brightness}%</span>
+                          </div>
+                          <input
+                            id="vid-bright"
+                            type="range"
+                            min={60}
+                            max={150}
+                            value={videoEditConfig.brightness}
+                            onChange={(e) =>
+                              setVideoEditConfig((v) => ({
+                                ...v,
+                                brightness: parseInt(e.target.value, 10),
+                              }))
+                            }
+                            className="w-full accent-blue-600"
+                          />
+                        </div>
+                        <div>
+                          <div className="flex justify-between text-[10px] font-semibold text-slate-600">
+                            <label htmlFor="vid-contrast">Contrast</label>
+                            <span className="font-mono">{videoEditConfig.contrast}%</span>
+                          </div>
+                          <input
+                            id="vid-contrast"
+                            type="range"
+                            min={60}
+                            max={160}
+                            value={videoEditConfig.contrast}
+                            onChange={(e) =>
+                              setVideoEditConfig((v) => ({
+                                ...v,
+                                contrast: parseInt(e.target.value, 10),
+                              }))
+                            }
+                            className="w-full accent-blue-600"
+                          />
+                        </div>
+                        <div>
+                          <div className="flex justify-between text-[10px] font-semibold text-slate-600">
+                            <label htmlFor="vid-sat">Saturation</label>
+                            <span className="font-mono">{videoEditConfig.saturation}%</span>
+                          </div>
+                          <input
+                            id="vid-sat"
+                            type="range"
+                            min={0}
+                            max={180}
+                            value={videoEditConfig.saturation}
+                            onChange={(e) =>
+                              setVideoEditConfig((v) => ({
+                                ...v,
+                                saturation: parseInt(e.target.value, 10),
+                              }))
+                            }
+                            className="w-full accent-blue-600"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        <div>
+                          <div className="flex justify-between text-[10px] font-semibold text-slate-600">
+                            <label htmlFor="vid-vignette">Vignette</label>
+                            <span className="font-mono">{videoEditConfig.vignette}%</span>
+                          </div>
+                          <input
+                            id="vid-vignette"
+                            type="range"
+                            min={0}
+                            max={100}
+                            value={videoEditConfig.vignette}
+                            onChange={(e) =>
+                              setVideoEditConfig((v) => ({
+                                ...v,
+                                vignette: parseInt(e.target.value, 10),
+                              }))
+                            }
+                            className="w-full accent-blue-600"
+                          />
+                        </div>
+                        <div>
+                          <div className="flex justify-between text-[10px] font-semibold text-slate-600">
+                            <label htmlFor="vid-letterbox">Cinema Bars</label>
+                            <span className="font-mono">{videoEditConfig.letterbox}%</span>
+                          </div>
+                          <input
+                            id="vid-letterbox"
+                            type="range"
+                            min={0}
+                            max={18}
+                            value={videoEditConfig.letterbox}
+                            onChange={(e) =>
+                              setVideoEditConfig((v) => ({
+                                ...v,
+                                letterbox: parseInt(e.target.value, 10),
+                              }))
+                            }
+                            className="w-full accent-blue-600"
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>

@@ -4,10 +4,14 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   CaptionCue,
   CaptionStyleConfig,
+  VideoEditConfig,
+  DEFAULT_VIDEO_EDIT_CONFIG,
   formatSrtTime,
   sliderValueToYPosition,
   yPositionToSliderValue,
   fixVideoDurationMetadata,
+  resolveCuePlacement,
+  computeVideoFrameTransform,
 } from '@/lib/subtitles';
 import {
   Play,
@@ -21,6 +25,7 @@ import {
   Loader2,
   MoveVertical,
   Layers,
+  Crosshair,
 } from 'lucide-react';
 
 interface CaptionCanvasPlayerProps {
@@ -29,7 +34,11 @@ interface CaptionCanvasPlayerProps {
   mediaFileName: string;
   cues: CaptionCue[];
   styleConfig: CaptionStyleConfig;
+  videoEditConfig?: VideoEditConfig;
   onPositionChange?: (patch: Partial<CaptionStyleConfig>) => void;
+  onUpdateCuePlacement?: (cueId: string, patch: Partial<CaptionCue>) => void;
+  dragScope?: 'all-cues' | 'current-cue';
+  onDragScopeChange?: (scope: 'all-cues' | 'current-cue') => void;
   aspectRatio: '9:16' | '16:9' | '1:1';
   onAspectRatioChange: (ratio: '9:16' | '16:9' | '1:1') => void;
   currentTime: number;
@@ -45,7 +54,11 @@ export default function CaptionCanvasPlayer({
   mediaFileName,
   cues,
   styleConfig,
+  videoEditConfig = DEFAULT_VIDEO_EDIT_CONFIG,
   onPositionChange,
+  onUpdateCuePlacement,
+  dragScope = 'all-cues',
+  onDragScopeChange,
   aspectRatio,
   onAspectRatioChange,
   currentTime,
@@ -70,6 +83,7 @@ export default function CaptionCanvasPlayer({
 
   const cuesRef = useRef(cues);
   const styleRef = useRef(styleConfig);
+  const videoEditRef = useRef<VideoEditConfig>(videoEditConfig);
   const timeRef = useRef(currentTime);
   const durationRef = useRef(duration);
   const exportingRef = useRef(isExportingVideo);
@@ -79,12 +93,28 @@ export default function CaptionCanvasPlayer({
   useEffect(() => {
     cuesRef.current = cues;
     styleRef.current = styleConfig;
+    videoEditRef.current = videoEditConfig;
     timeRef.current = currentTime;
     durationRef.current = duration;
     exportingRef.current = isExportingVideo;
     playingRef.current = isPlaying;
     transcribingRef.current = isTranscribing;
-  }, [cues, styleConfig, currentTime, duration, isExportingVideo, isPlaying, isTranscribing]);
+  }, [
+    cues,
+    styleConfig,
+    videoEditConfig,
+    currentTime,
+    duration,
+    isExportingVideo,
+    isPlaying,
+    isTranscribing,
+  ]);
+
+  useEffect(() => {
+    const rate = Math.max(0.5, Math.min(2, videoEditConfig.playbackRate || 1));
+    if (videoRef.current) videoRef.current.playbackRate = rate;
+    if (audioRef.current) audioRef.current.playbackRate = rate;
+  }, [videoEditConfig.playbackRate]);
 
   const getCanvasDimensions = useCallback(() => {
     if (aspectRatio === '9:16') return { width: 720, height: 1280 };
@@ -284,17 +314,75 @@ export default function CaptionCanvasPlayer({
     return fgCanvas;
   };
 
+  const findActiveCueForTime = useCallback(
+    (
+      activeCues: CaptionCue[],
+      nowSec: number,
+      allowIdleFallback: boolean = true
+    ) => {
+      let idx = activeCues.findIndex(
+        (c) => nowSec >= c.start - 0.05 && nowSec <= c.end + 0.05
+      );
+      if (idx === -1 && activeCues.length > 0) {
+        idx = activeCues.findIndex(
+          (c, i) =>
+            nowSec > c.end &&
+            nowSec - c.end <= 1.8 &&
+            (!activeCues[i + 1] || nowSec < activeCues[i + 1].start)
+        );
+      }
+      if (idx === -1 && allowIdleFallback && activeCues.length > 0) {
+        idx = 0;
+      }
+      return {
+        cue: idx >= 0 ? activeCues[idx] : undefined,
+        index: idx >= 0 ? idx : 0,
+      };
+    },
+    []
+  );
+
   const drawFrame = useCallback(
     (ctx: CanvasRenderingContext2D, width: number, height: number, nowSec: number) => {
       const style = styleRef.current;
       const activeCues = cuesRef.current;
+      const editCfg = videoEditRef.current || DEFAULT_VIDEO_EDIT_CONFIG;
 
-      // 1. Background / Video layer (Strictly NO watermark)
+      // Determine active cue & cue index first so Auto Jump-Cut Zoom & Per-Cue Placement sync
+      const { cue: matchedCue, index: activeCueIdx } = findActiveCueForTime(
+        activeCues,
+        nowSec,
+        !exportingRef.current && !playingRef.current
+      );
+      let activeCue = matchedCue;
+
+      const frameTransform = computeVideoFrameTransform(
+        editCfg,
+        activeCueIdx,
+        durationRef.current || 10
+      );
+
+      // 1. Background / Video layer (Strictly NO watermark) with Video Editing Transforms
       ctx.fillStyle = '#0B1120';
       ctx.fillRect(0, 0, width, height);
 
       const vid = videoRef.current;
       const hasLiveVideo = mediaType === 'video' && vid && vid.readyState >= 2;
+
+      ctx.save();
+      if (frameTransform.cssFilter && frameTransform.cssFilter !== 'none') {
+        ctx.filter = frameTransform.cssFilter;
+      }
+
+      // Apply Camera Zoom, Pan X/Y, Auto Jump-Cut Zoom, and Horizontal Mirror Flip
+      const centerX = width / 2 + frameTransform.panXPxRatio * width;
+      const centerY = height / 2 + frameTransform.panYPxRatio * height;
+      ctx.translate(centerX, centerY);
+      ctx.scale(
+        frameTransform.effectiveZoom * frameTransform.mirrorScaleX,
+        frameTransform.effectiveZoom
+      );
+      ctx.translate(-width / 2, -height / 2);
 
       if (hasLiveVideo && vid) {
         const vw = vid.videoWidth || width;
@@ -360,7 +448,7 @@ export default function CaptionCanvasPlayer({
           const startX = (width - totalBarW) / 2;
           const barW = (totalBarW / barCount) * 0.6;
           const gap = (totalBarW / barCount) * 0.4;
-          const centerY = height * 0.42;
+          const centerYBar = height * 0.42;
 
           ctx.fillStyle = 'rgba(29, 92, 255, 0.45)';
           for (let i = 0; i < barCount; i++) {
@@ -372,7 +460,7 @@ export default function CaptionCanvasPlayer({
             ctx.beginPath();
             ctx.roundRect(
               startX + i * (barW + gap),
-              centerY - barH / 2,
+              centerYBar - barH / 2,
               barW,
               barH,
               4
@@ -381,60 +469,77 @@ export default function CaptionCanvasPlayer({
           }
         }
       }
+      ctx.restore();
 
-      // 2. Find current active cue (with 1.8s continuous voiceover hold so captions never flicker)
-      let activeCue = activeCues.find(
-        (c) => nowSec >= c.start - 0.05 && nowSec <= c.end + 0.05
-      );
-      if (!activeCue && activeCues.length > 0) {
-        activeCue = activeCues.find(
-          (c, idx) =>
-            nowSec > c.end &&
-            nowSec - c.end <= 1.8 &&
-            (!activeCues[idx + 1] || nowSec < activeCues[idx + 1].start)
+      // Apply Cinema Vignette if configured in Video Editor
+      if ((editCfg.vignette || 0) > 0) {
+        const vigAlpha = Math.min(0.88, (editCfg.vignette / 100) * 0.82);
+        const vigGrad = ctx.createRadialGradient(
+          width / 2,
+          height / 2,
+          Math.min(width, height) * 0.28,
+          width / 2,
+          height / 2,
+          Math.max(width, height) * 0.72
         );
+        vigGrad.addColorStop(0, 'rgba(0,0,0,0)');
+        vigGrad.addColorStop(1, `rgba(2,6,23,${vigAlpha.toFixed(2)})`);
+        ctx.fillStyle = vigGrad;
+        ctx.fillRect(0, 0, width, height);
       }
+
+      // Apply Cinema Letterbox Bars if configured in Video Editor
+      if ((editCfg.letterbox || 0) > 0) {
+        const barH = Math.round(height * (Math.min(20, editCfg.letterbox) / 100));
+        ctx.fillStyle = '#020617';
+        ctx.fillRect(0, 0, width, barH);
+        ctx.fillRect(0, height - barH, width, barH);
+      }
+
       if (!activeCue && !exportingRef.current && !playingRef.current) {
-        if (activeCues.length > 0) {
-          activeCue = activeCues[0];
-        } else {
-          activeCue = {
-            id: 'preview-guide',
-            index: 1,
-            start: 0,
-            end: 6,
-            text: transcribingRef.current
-              ? 'Generating AI Captions…'
-              : style.depthBehindSubject
-                ? 'KUCH PICHE KUCH AAGE'
-                : 'CAPTANZ 3D STUDIO',
-            words: transcribingRef.current
+        activeCue = {
+          id: 'preview-guide',
+          index: 1,
+          start: 0,
+          end: 6,
+          text: transcribingRef.current
+            ? 'Generating AI Captions…'
+            : style.depthBehindSubject
+              ? 'KUCH PICHE KUCH AAGE'
+              : 'CAPTANZ 3D STUDIO',
+          words: transcribingRef.current
+            ? [
+                { word: 'Generating', start: 0, end: 2 },
+                { word: 'AI', start: 2, end: 4 },
+                { word: 'Captions…', start: 4, end: 6 },
+              ]
+            : style.depthBehindSubject
               ? [
-                  { word: 'Generating', start: 0, end: 2 },
-                  { word: 'AI', start: 2, end: 4 },
-                  { word: 'Captions…', start: 4, end: 6 },
+                  { word: 'KUCH', start: 0, end: 1.5 },
+                  { word: 'PICHE', start: 1.5, end: 3 },
+                  { word: 'KUCH', start: 3, end: 4.5 },
+                  { word: 'AAGE', start: 4.5, end: 6 },
                 ]
-              : style.depthBehindSubject
-                ? [
-                    { word: 'KUCH', start: 0, end: 1.5 },
-                    { word: 'PICHE', start: 1.5, end: 3 },
-                    { word: 'KUCH', start: 3, end: 4.5 },
-                    { word: 'AAGE', start: 4.5, end: 6 },
-                  ]
-                : [
-                    { word: 'CAPTANZ', start: 0, end: 2 },
-                    { word: '3D', start: 2, end: 4 },
-                    { word: 'STUDIO', start: 4, end: 6 },
-                  ],
-          };
-        }
+              : [
+                  { word: 'CAPTANZ', start: 0, end: 2 },
+                  { word: '3D', start: 2, end: 4 },
+                  { word: 'STUDIO', start: 4, end: 6 },
+                ],
+        };
       }
+
       if (!activeCue) {
         if (!hasLiveVideo && style.depthBehindSubject && mediaType !== 'audio') {
           drawDemoForegroundObstacles(ctx, width, height, nowSec);
         }
         return;
       }
+
+      // Resolve per-cue placement & dynamic layout mode (e.g., Hook at Top, Body at Bottom, or custom per-cue overrides)
+      const cuePlacement = resolveCuePlacement(activeCue, activeCueIdx, style);
+      const effectiveActiveColor = cuePlacement.activeWordColor;
+      const effectiveDepthBehind = cuePlacement.depthBehindSubject;
+      const effectiveDepthOrder = cuePlacement.depthLayeringOrder;
 
       const cueDur = Math.max(0.25, activeCue.end - activeCue.start);
       const rawCueProgress =
@@ -449,8 +554,8 @@ export default function CaptionCanvasPlayer({
 
       const scaleFactor = width / 680;
       const computedFontSize = Math.max(
-        26,
-        Math.round(style.fontSize * scaleFactor)
+        24,
+        Math.round(style.fontSize * scaleFactor * cuePlacement.fontSizeScale)
       );
       const fontWeight =
         style.fontFamily === 'Bebas Neue' || style.fontFamily === 'Anton'
@@ -577,10 +682,10 @@ export default function CaptionCanvasPlayer({
 
       const lineHeight = computedFontSize * 1.3;
       const totalBlockHeight = lines.length * lineHeight;
-      const xPosPct = style.xPosition ?? 50;
+      const xPosPct = cuePlacement.xPosition;
       const anchorX = (width * xPosPct) / 100 + crossOffsetX;
       const baseY =
-        (height * style.yPosition) / 100 - totalBlockHeight / 2 + crossOffsetY;
+        (height * cuePlacement.yPosition) / 100 - totalBlockHeight / 2 + crossOffsetY;
 
       const widestLine = Math.max(
         40,
@@ -601,7 +706,7 @@ export default function CaptionCanvasPlayer({
       const patchH = totalBlockHeight + padBoundY * 2;
 
       let fgMaskCanvas: HTMLCanvasElement | null = null;
-      if (style.depthBehindSubject && hasLiveVideo) {
+      if (effectiveDepthBehind && hasLiveVideo) {
         fgMaskCanvas = prepareVideoForegroundMask(
           ctx,
           width,
@@ -647,8 +752,7 @@ export default function CaptionCanvasPlayer({
       const extrudeDepth = Math.round((style.extrudeDepth || 0) * scaleFactor);
       const extrudeColor = style.extrudeColor || '#0F172A';
       const glowBlur = Math.round((style.glowBlur || 0) * scaleFactor);
-      const glowColor = style.glowColor || style.activeWordColor;
-      const depthOrder = style.depthLayeringOrder || 'weave-active-front';
+      const glowColor = style.glowColor || effectiveActiveColor;
 
       // Determines whether a specific word renders IN FRONT OF obstacles (true) or BEHIND obstacles (false)
       const isWordRenderedInFrontOfObstacle = (
@@ -656,19 +760,15 @@ export default function CaptionCanvasPlayer({
         lineIdx: number,
         totalLinesCount: number
       ): boolean => {
-        if (!style.depthBehindSubject) return true;
-        if (depthOrder === 'all-behind') return false;
-        if (depthOrder === 'alternate-words') {
-          // Odd words pop IN FRONT of obstacles, Even words pass BEHIND obstacles
+        if (!effectiveDepthBehind) return true;
+        if (effectiveDepthOrder === 'all-behind') return false;
+        if (effectiveDepthOrder === 'alternate-words') {
           return mw.wordIndex % 2 === 1;
         }
-        if (depthOrder === 'split-lines') {
-          // Top line passes BEHIND obstacle, Bottom line pops IN FRONT of obstacle
+        if (effectiveDepthOrder === 'split-lines') {
           if (totalLinesCount > 1) return lineIdx > 0;
           return mw.isActive;
         }
-        // Default 'weave-active-front' (Viral YouTuber Sandwich: Kuch Piche, Kuch Aage):
-        // Setup/inactive words glide BEHIND the obstacle, while the Active Spoken Word pops IN FRONT!
         return mw.isActive;
       };
 
@@ -776,7 +876,7 @@ export default function CaptionCanvasPlayer({
             }
 
             if (passMode === 'xray-behind') {
-              ctx.strokeStyle = style.activeWordColor || '#38BDF8';
+              ctx.strokeStyle = effectiveActiveColor || '#38BDF8';
               ctx.lineWidth = Math.max(1.5, 2 * scaleFactor);
               ctx.strokeText(mw.text, drawX, drawY);
               ctx.restore();
@@ -816,13 +916,13 @@ export default function CaptionCanvasPlayer({
               ctx.restore();
             }
 
-            // Captik Laser Beam Strike under active word
+            // Laser Beam Strike under active word
             if (animStyle === 'laser-strike' && mw.isActive) {
               ctx.save();
               const beamY = drawY + computedFontSize * 0.48;
               ctx.shadowColor = glowColor;
               ctx.shadowBlur = 18 * scaleFactor;
-              ctx.fillStyle = style.activeWordColor;
+              ctx.fillStyle = effectiveActiveColor;
               ctx.beginPath();
               ctx.roundRect(
                 drawX - 4,
@@ -835,7 +935,7 @@ export default function CaptionCanvasPlayer({
               ctx.restore();
             }
 
-            // After Effects RGB Chromatic Aberration Split on Glitch mode
+            // Motion Graphics RGB Chromatic Aberration Split on Glitch mode
             if (animStyle === 'glitch' && (mw.isActive || style.preset === 'kinetic-rgb-glitch')) {
               const shift = (mw.isActive ? 5 : 2.5) * scaleFactor;
               ctx.save();
@@ -847,7 +947,7 @@ export default function CaptionCanvasPlayer({
               ctx.restore();
             }
 
-            // After Effects 3D Isometric Stacked Extrusion
+            // 3D Isometric Stacked Extrusion
             if (extrudeDepth > 0) {
               ctx.save();
               ctx.fillStyle = extrudeColor;
@@ -858,7 +958,7 @@ export default function CaptionCanvasPlayer({
               ctx.restore();
             }
 
-            // After Effects Saber / Neon Outer Glow
+            // Neon Outer Glow
             if (glowBlur > 0) {
               const flickerMult =
                 animStyle === 'flicker'
@@ -897,7 +997,7 @@ export default function CaptionCanvasPlayer({
                   drawX,
                   drawY + computedFontSize * 0.5
                 );
-                activeGrad.addColorStop(0, style.activeWordColor);
+                activeGrad.addColorStop(0, effectiveActiveColor);
                 activeGrad.addColorStop(1, style.gradientEndColor);
                 ctx.fillStyle = activeGrad;
               } else if (
@@ -906,11 +1006,11 @@ export default function CaptionCanvasPlayer({
               ) {
                 ctx.fillStyle =
                   mw.isActive || mw.isPast
-                    ? style.activeWordColor
+                    ? effectiveActiveColor
                     : style.textColor;
               } else {
                 ctx.fillStyle = mw.isActive
-                  ? style.activeWordColor
+                  ? effectiveActiveColor
                   : style.textColor;
               }
 
@@ -927,11 +1027,11 @@ export default function CaptionCanvasPlayer({
 
       ctx.restore();
 
-      if (!style.depthBehindSubject) {
+      if (!effectiveDepthBehind) {
         // Standard single-pass render when obstacle depth sandwich is off
         renderCaptionLines('all');
       } else {
-        // 4-PASS VIRAL YOUTUBER OBSTACLE SANDWICH ("Kuch Text Obstacles Ke Piche, Kuch Text Aage")
+        // 4-PASS OBSTACLE SANDWICH ("Kuch Text Obstacles Ke Piche, Kuch Text Aage")
         // Pass 2: Draw words that pass BEHIND the obstacles
         renderCaptionLines('behind-only');
 
@@ -972,10 +1072,10 @@ export default function CaptionCanvasPlayer({
         renderCaptionLines('front-only');
       }
     },
-    [mediaType]
+    [mediaType, findActiveCueForTime]
   );
 
-  // Redraw when style, cues, aspect ratio, or paused scrub position changes
+  // Redraw when style, cues, videoEditConfig, aspect ratio, or paused scrub position changes
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -989,9 +1089,18 @@ export default function CaptionCanvasPlayer({
     if (!playingRef.current && !exportingRef.current) {
       drawFrame(ctx, width, height, currentTime);
     }
-  }, [currentTime, styleConfig, cues, aspectRatio, isTranscribing, getCanvasDimensions, drawFrame]);
+  }, [
+    currentTime,
+    styleConfig,
+    videoEditConfig,
+    cues,
+    aspectRatio,
+    isTranscribing,
+    getCanvasDimensions,
+    drawFrame,
+  ]);
 
-  // Force an immediate canvas draw whenever `cues` or `styleConfig` updates even while playing
+  // Force an immediate canvas draw whenever `cues`, `styleConfig`, or `videoEditConfig` updates even while playing
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -1006,7 +1115,7 @@ export default function CaptionCanvasPlayer({
           ? aud.currentTime
           : timeRef.current;
     drawFrame(ctx, canvas.width, canvas.height, nowT);
-  }, [cues, styleConfig, mediaType, drawFrame]);
+  }, [cues, styleConfig, videoEditConfig, mediaType, drawFrame]);
 
   // High-FPS playback loop decoupled from parent React state re-renders (throttles onTimeUpdate to 8Hz)
   useEffect(() => {
@@ -1022,17 +1131,36 @@ export default function CaptionCanvasPlayer({
 
       const vid = videoRef.current;
       const aud = audioRef.current;
+      const editCfg = videoEditRef.current || DEFAULT_VIDEO_EDIT_CONFIG;
+      const maxDur = Math.max(1, durationRef.current);
+      const trimStart = Math.max(0, Math.min(maxDur - 0.25, editCfg.trimStart || 0));
+      const trimEnd =
+        editCfg.trimEnd && editCfg.trimEnd > trimStart + 0.25
+          ? Math.min(maxDur, editCfg.trimEnd)
+          : maxDur;
+      const rate = Math.max(0.5, Math.min(2, editCfg.playbackRate || 1));
 
       let nextTime = timeRef.current;
       if (mediaType === 'video' && vid && !vid.paused) {
         nextTime = vid.currentTime;
+        if (nextTime >= trimEnd) {
+          vid.pause();
+          vid.currentTime = trimStart;
+          nextTime = trimStart;
+          setIsPlaying(false);
+        }
       } else if (mediaType === 'audio' && aud && !aud.paused) {
         nextTime = aud.currentTime;
+        if (nextTime >= trimEnd) {
+          aud.pause();
+          aud.currentTime = trimStart;
+          nextTime = trimStart;
+          setIsPlaying(false);
+        }
       } else {
-        const maxDur = Math.max(1, durationRef.current);
-        nextTime = timeRef.current + dt;
-        if (nextTime >= maxDur) {
-          nextTime = 0;
+        nextTime = timeRef.current + dt * rate;
+        if (nextTime >= trimEnd) {
+          nextTime = trimStart;
           setIsPlaying(false);
         }
       }
@@ -1096,18 +1224,28 @@ export default function CaptionCanvasPlayer({
   const togglePlay = async () => {
     const vid = videoRef.current;
     const aud = audioRef.current;
+    const editCfg = videoEditRef.current || DEFAULT_VIDEO_EDIT_CONFIG;
+    const maxDur = Math.max(1, duration);
+    const trimStart = Math.max(0, Math.min(maxDur - 0.25, editCfg.trimStart || 0));
+    const trimEnd =
+      editCfg.trimEnd && editCfg.trimEnd > trimStart + 0.25
+        ? Math.min(maxDur, editCfg.trimEnd)
+        : maxDur;
+    const rate = Math.max(0.5, Math.min(2, editCfg.playbackRate || 1));
 
     if (isPlaying) {
       if (vid) vid.pause();
       if (aud) aud.pause();
       setIsPlaying(false);
     } else {
-      if (currentTime >= duration - 0.1) {
-        handleSeek(0);
+      if (currentTime >= trimEnd - 0.1 || currentTime < trimStart) {
+        handleSeek(trimStart);
       }
       if (mediaType === 'video' && vid && mediaUrl) {
+        vid.playbackRate = rate;
         await vid.play().catch(() => {});
       } else if (mediaType === 'audio' && aud && mediaUrl) {
+        aud.playbackRate = rate;
         await aud.play().catch(() => {});
       }
       setIsPlaying(true);
@@ -1133,6 +1271,24 @@ export default function CaptionCanvasPlayer({
     if (videoRef.current) videoRef.current.muted = next;
     if (audioRef.current) audioRef.current.muted = next;
   };
+
+  // Apply drag or pointer position to either All Cues or Current Active Cue Only
+  const applyPlacementChange = useCallback(
+    (patch: { xPosition?: number; yPosition?: number }) => {
+      if (dragScope === 'current-cue' && onUpdateCuePlacement) {
+        const { cue } = findActiveCueForTime(cuesRef.current, timeRef.current);
+        if (cue) {
+          onUpdateCuePlacement(cue.id, patch);
+          return;
+        }
+      }
+      onPositionChange?.({
+        ...patch,
+        dynamicLayoutMode: 'custom',
+      });
+    },
+    [dragScope, onUpdateCuePlacement, onPositionChange, findActiveCueForTime]
+  );
 
   // Smooth, Hardware-Accelerated Watermark-Free Video Export + Duration Header Patching
   const handleExportWatermarkFreeVideo = async () => {
@@ -1162,10 +1318,21 @@ export default function CaptionCanvasPlayer({
           ? Math.max(...cuesRef.current.map((c) => c.end))
           : 0;
 
-      const exportDuration = Math.max(
+      const fullDuration = Math.max(
         1,
         mediaRealDur || durationRef.current || cueMaxEnd || 5
       );
+      const editCfg = videoEditRef.current || DEFAULT_VIDEO_EDIT_CONFIG;
+      const trimStart = Math.max(
+        0,
+        Math.min(fullDuration - 0.25, editCfg.trimStart || 0)
+      );
+      const trimEnd =
+        editCfg.trimEnd && editCfg.trimEnd > trimStart + 0.25
+          ? Math.min(fullDuration, editCfg.trimEnd)
+          : fullDuration;
+      const exportDuration = Math.max(0.5, trimEnd - trimStart);
+      const rate = Math.max(0.5, Math.min(2, editCfg.playbackRate || 1));
 
       const stream = canvas.captureStream(30);
 
@@ -1212,7 +1379,7 @@ export default function CaptionCanvasPlayer({
         if (e.data && e.data.size > 0) chunks.push(e.data);
       };
 
-      let recordedDurationSec = exportDuration;
+      let recordedDurationSec = exportDuration / rate;
 
       const exportDonePromise = new Promise<string>((resolve) => {
         recorder.onstop = async () => {
@@ -1229,7 +1396,8 @@ export default function CaptionCanvasPlayer({
       });
 
       if (mediaEl) {
-        mediaEl.currentTime = 0;
+        mediaEl.playbackRate = rate;
+        mediaEl.currentTime = trimStart;
         await new Promise<void>((res) => {
           const done = () => {
             mediaEl.removeEventListener('seeked', done);
@@ -1241,7 +1409,7 @@ export default function CaptionCanvasPlayer({
       }
 
       const ctx = canvas.getContext('2d', { alpha: false })!;
-      drawFrame(ctx, canvas.width, canvas.height, 0);
+      drawFrame(ctx, canvas.width, canvas.height, trimStart);
 
       recorder.start(250);
       const startPerf = performance.now();
@@ -1258,11 +1426,15 @@ export default function CaptionCanvasPlayer({
           const nowT =
             mediaEl && !mediaEl.paused && !mediaEl.ended
               ? mediaEl.currentTime
-              : elapsed;
+              : trimStart + elapsed * rate;
 
           drawFrame(ctx, canvas.width, canvas.height, nowT);
 
-          const pct = Math.min(99, Math.round((nowT / exportDuration) * 100));
+          const progressRatio = Math.max(
+            0,
+            (nowT - trimStart) / Math.max(0.25, exportDuration)
+          );
+          const pct = Math.min(99, Math.round(progressRatio * 100));
           if (pct >= lastPct + 2 || pct === 99) {
             lastPct = pct;
             setExportProgress(pct);
@@ -1271,10 +1443,13 @@ export default function CaptionCanvasPlayer({
           const mediaFinished = mediaEl ? mediaEl.ended : false;
           if (
             mediaFinished ||
-            nowT >= exportDuration ||
-            elapsed >= exportDuration + 0.35
+            nowT >= trimEnd ||
+            elapsed >= exportDuration / rate + 0.35
           ) {
-            recordedDurationSec = Math.max(1, nowT || exportDuration);
+            recordedDurationSec = Math.max(
+              0.5,
+              (nowT - trimStart) / rate || exportDuration / rate
+            );
             resolve();
           } else {
             requestAnimationFrame(step);
@@ -1291,7 +1466,7 @@ export default function CaptionCanvasPlayer({
       const finalUrl = await exportDonePromise;
       setExportProgress(100);
       setExportedVideoUrl(finalUrl);
-      onTimeUpdate(0);
+      onTimeUpdate(trimStart);
 
       const ext = isMp4 ? 'mp4' : 'webm';
       const baseName = mediaFileName
@@ -1308,6 +1483,19 @@ export default function CaptionCanvasPlayer({
       setIsExportingVideo(false);
     }
   };
+
+  // Resolve current cue's effective Y position for the Pointer Slider display
+  const activeCueInfo = findActiveCueForTime(cues, currentTime);
+  const currentResolvedPlacement = activeCueInfo.cue
+    ? resolveCuePlacement(activeCueInfo.cue, activeCueInfo.index, styleConfig)
+    : {
+        yPosition: styleConfig.yPosition,
+        xPosition: styleConfig.xPosition ?? 50,
+        fontSizeScale: 1,
+        activeWordColor: styleConfig.activeWordColor,
+        depthBehindSubject: Boolean(styleConfig.depthBehindSubject),
+        depthLayeringOrder: styleConfig.depthLayeringOrder || 'weave-active-front',
+      };
 
   return (
     <div className="flex flex-col h-full bg-slate-950 rounded-xl border border-slate-800 overflow-hidden">
@@ -1327,7 +1515,7 @@ export default function CaptionCanvasPlayer({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          {/* Quick One-Click Toggle for Viral YouTuber Obstacle Weave (Kuch Piche, Kuch Aage) */}
+          {/* Quick One-Click Toggle for Obstacle Weave (Kuch Piche, Kuch Aage) */}
           <button
             type="button"
             onClick={() =>
@@ -1433,7 +1621,6 @@ export default function CaptionCanvasPlayer({
           ref={canvasRef}
           data-testid="caption-preview-canvas"
           onPointerDown={(e) => {
-            if (!onPositionChange) return;
             isDraggingCanvasRef.current = true;
             e.currentTarget.setPointerCapture(e.pointerId);
             const rect = e.currentTarget.getBoundingClientRect();
@@ -1443,10 +1630,10 @@ export default function CaptionCanvasPlayer({
             const yPct = Math.round(
               Math.max(10, Math.min(90, ((e.clientY - rect.top) / rect.height) * 100))
             );
-            onPositionChange({ xPosition: xPct, yPosition: yPct });
+            applyPlacementChange({ xPosition: xPct, yPosition: yPct });
           }}
           onPointerMove={(e) => {
-            if (!isDraggingCanvasRef.current || !onPositionChange) return;
+            if (!isDraggingCanvasRef.current) return;
             const rect = e.currentTarget.getBoundingClientRect();
             const xPct = Math.round(
               Math.max(15, Math.min(85, ((e.clientX - rect.left) / rect.width) * 100))
@@ -1454,7 +1641,7 @@ export default function CaptionCanvasPlayer({
             const yPct = Math.round(
               Math.max(10, Math.min(90, ((e.clientY - rect.top) / rect.height) * 100))
             );
-            onPositionChange({ xPosition: xPct, yPosition: yPct });
+            applyPlacementChange({ xPosition: xPct, yPosition: yPct });
           }}
           onPointerUp={(e) => {
             if (isDraggingCanvasRef.current) {
@@ -1474,17 +1661,78 @@ export default function CaptionCanvasPlayer({
         />
       </div>
 
-      {/* Dedicated Caption Height Pointer Line (Right = Captions Move UP, Left = Captions Move DOWN) */}
-      <div className="px-4 py-3 bg-slate-900/95 border-t border-slate-800 space-y-1.5">
-        <div className="flex items-center justify-between text-xs">
-          <span className="flex items-center gap-1.5 font-bold text-white">
-            <MoveVertical className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-            <span>Caption Position Pointer Line (कैप्शन हाइट लाइन)</span>
-          </span>
-          <span className="font-mono tabular-nums text-[11px] text-blue-300 font-semibold">
-            Pointer: {yPositionToSliderValue(styleConfig.yPosition)}% (Right = ऊपर · Left = नीचे)
-          </span>
+      {/* Dedicated Caption Height Pointer Line + Per-Cue / All-Cues Quick Zone Switcher */}
+      <div className="px-4 py-2.5 bg-slate-900/95 border-t border-slate-800 space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1.5 font-bold text-white">
+              <MoveVertical className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+              <span>Caption Position (कैप्शन पोज़िशन)</span>
+            </span>
+
+            {/* Drag Scope Switcher: All Cues vs Current Cue Only */}
+            {onDragScopeChange && (
+              <div
+                className="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-[10px]"
+                role="group"
+                aria-label="Caption position target scope"
+              >
+                <button
+                  type="button"
+                  onClick={() => onDragScopeChange('all-cues')}
+                  className={`px-2 py-0.5 rounded font-semibold transition-colors ${
+                    dragScope === 'all-cues'
+                      ? 'bg-blue-600 text-white'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  All Cues (पूरा वीडियो)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDragScopeChange('current-cue')}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded font-semibold transition-colors ${
+                    dragScope === 'current-cue'
+                      ? 'bg-amber-500 text-slate-950'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Crosshair className="w-2.5 h-2.5" />
+                  <span>
+                    This Cue #{activeCueInfo.index + 1} (सिर्फ यह लाइन)
+                  </span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* 1-Click Zone Buttons (ऊपर / बीच में / नीचे) */}
+          <div className="flex items-center gap-1">
+            {[
+              { label: 'ऊपर (Top)', y: 20 },
+              { label: 'बीच (Center)', y: 50 },
+              { label: 'नीचे (Bottom)', y: 78 },
+            ].map((z) => {
+              const isCurrentZone =
+                Math.abs(currentResolvedPlacement.yPosition - z.y) <= 8;
+              return (
+                <button
+                  key={z.label}
+                  type="button"
+                  onClick={() => applyPlacementChange({ yPosition: z.y })}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors ${
+                    isCurrentZone
+                      ? 'bg-blue-600/25 border-blue-500 text-blue-200'
+                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {z.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
+
         <div className="flex items-center gap-3">
           <span className="text-[11px] font-semibold text-slate-400 whitespace-nowrap">
             ← नीचे (Bottom)
@@ -1496,10 +1744,10 @@ export default function CaptionCanvasPlayer({
             min={0}
             max={100}
             step={1}
-            value={yPositionToSliderValue(styleConfig.yPosition)}
+            value={yPositionToSliderValue(currentResolvedPlacement.yPosition)}
             onChange={(e) => {
               const sliderVal = parseInt(e.target.value, 10);
-              onPositionChange?.({
+              applyPlacementChange({
                 yPosition: sliderValueToYPosition(sliderVal),
               });
             }}
@@ -1525,9 +1773,18 @@ export default function CaptionCanvasPlayer({
             className="w-full accent-blue-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
           />
           <div className="flex items-center justify-between text-[11px] font-mono tabular-nums text-slate-400">
-            <span>{formatSrtTime(currentTime)}</span>
             <span>
-              {cues.length} cues · {formatSrtTime(duration)}
+              {formatSrtTime(currentTime)}
+              {(videoEditConfig.trimStart > 0 || videoEditConfig.trimEnd > 0) && (
+                <span className="ml-2 text-amber-400">
+                  Trim: { (videoEditConfig.trimStart || 0).toFixed(1) }s –{' '}
+                  { (videoEditConfig.trimEnd > 0 ? videoEditConfig.trimEnd : duration).toFixed(1) }s
+                </span>
+              )}
+            </span>
+            <span>
+              {cues.length} cues · {videoEditConfig.playbackRate !== 1 ? `${videoEditConfig.playbackRate}x · ` : ''}
+              {formatSrtTime(duration)}
             </span>
           </div>
         </div>
@@ -1555,7 +1812,7 @@ export default function CaptionCanvasPlayer({
 
             <button
               type="button"
-              onClick={() => handleSeek(0)}
+              onClick={() => handleSeek(videoEditConfig.trimStart || 0)}
               aria-label="Restart preview from beginning"
               className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
             >

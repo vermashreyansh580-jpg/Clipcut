@@ -12,7 +12,61 @@ export interface CaptionCue {
   text: string;
   words: WordTiming[];
   speaker?: string;
+  // Per-cue custom position & style overrides (so creators can place intro hook at top & customize any line)
+  yPosition?: number; // 10 to 90 (% from top)
+  xPosition?: number; // 15 to 85 (% from left)
+  fontSizeScale?: number; // 0.7 to 1.5 (e.g. 1.2 for Big Hook)
+  customActiveColor?: string;
+  depthOverride?: 'auto' | 'weave' | 'behind' | 'front';
 }
+
+export type CaptionDynamicLayoutMode =
+  | 'custom'
+  | 'hook-top-body-bottom'
+  | 'hook-center-body-bottom'
+  | 'alternating-zones';
+
+export type VideoColorFilterPreset =
+  | 'none'
+  | 'viral-crisp'
+  | 'cinema-teal-gold'
+  | 'moody-matte'
+  | 'warm-glow'
+  | 'bw-docu';
+
+export interface VideoEditConfig {
+  trimStart: number; // start time in seconds (default 0)
+  trimEnd: number; // end time in seconds (0 = full duration)
+  playbackRate: number; // 0.5 to 2.0 (default 1.0)
+  zoom: number; // 1.0 to 2.0 (default 1.0)
+  panX: number; // -40 to 40 (% horizontal offset)
+  panY: number; // -40 to 40 (% vertical offset)
+  autoJumpCutZoom: boolean; // punch-in 1.14x on alternate cues like viral video editors
+  mirrorHorizontal: boolean; // flip video horizontally
+  colorPreset: VideoColorFilterPreset;
+  brightness: number; // 50 to 150 (default 100)
+  contrast: number; // 50 to 150 (default 100)
+  saturation: number; // 0 to 200 (default 100)
+  vignette: number; // 0 to 80 (default 0)
+  letterbox: number; // 0 to 16 (% black cinema bars top & bottom)
+}
+
+export const DEFAULT_VIDEO_EDIT_CONFIG: VideoEditConfig = {
+  trimStart: 0,
+  trimEnd: 0,
+  playbackRate: 1,
+  zoom: 1,
+  panX: 0,
+  panY: 0,
+  autoJumpCutZoom: false,
+  mirrorHorizontal: false,
+  colorPreset: 'none',
+  brightness: 100,
+  contrast: 100,
+  saturation: 100,
+  vignette: 0,
+  letterbox: 0,
+};
 
 export type CaptionStylePreset =
   | 'creator-obstacle-weave'
@@ -123,6 +177,7 @@ export interface CaptionStyleConfig {
   depthXrayOutline?: number; // 0 to 60 (% ghost rim opacity on obstacle)
   crossDirection?: CaptionCrossDirection;
   crossSpeed?: number; // 10 to 100
+  dynamicLayoutMode?: CaptionDynamicLayoutMode;
 }
 
 export function sliderValueToYPosition(sliderVal: number): number {
@@ -133,6 +188,206 @@ export function sliderValueToYPosition(sliderVal: number): number {
 export function yPositionToSliderValue(yPosition: number): number {
   const clamped = Math.max(10, Math.min(90, Number(yPosition) || 50));
   return Math.round(((90 - clamped) / 80) * 100);
+}
+
+export function resolveCuePlacement(
+  cue: CaptionCue,
+  cueIndex: number,
+  style: CaptionStyleConfig
+): {
+  xPosition: number;
+  yPosition: number;
+  fontSizeScale: number;
+  activeWordColor: string;
+  depthBehindSubject: boolean;
+  depthLayeringOrder: CaptionDepthLayeringOrder;
+  placementLabel: 'TOP' | 'MID' | 'BOT' | 'CUSTOM';
+} {
+  const mode = style.dynamicLayoutMode || 'custom';
+  let yPos = style.yPosition;
+  let xPos = style.xPosition ?? 50;
+  let scale = 1;
+
+  if (mode === 'hook-top-body-bottom') {
+    const isIntroHook = cueIndex === 0 || cue.start < 3.9;
+    yPos = isIntroHook ? 22 : 76;
+    scale = isIntroHook ? 1.16 : 1;
+  } else if (mode === 'hook-center-body-bottom') {
+    const isIntroHook = cueIndex === 0 || cue.start < 3.9;
+    yPos = isIntroHook ? 45 : 78;
+    scale = isIntroHook ? 1.2 : 1;
+  } else if (mode === 'alternating-zones') {
+    const pattern = [24, 48, 76];
+    yPos = pattern[cueIndex % pattern.length];
+    scale = cueIndex === 0 ? 1.14 : 1;
+  }
+
+  // Explicit per-cue overrides always take highest priority so creators can customize any single cue
+  if (typeof cue.yPosition === 'number' && Number.isFinite(cue.yPosition)) {
+    yPos = Math.max(10, Math.min(90, cue.yPosition));
+  }
+  if (typeof cue.xPosition === 'number' && Number.isFinite(cue.xPosition)) {
+    xPos = Math.max(15, Math.min(85, cue.xPosition));
+  }
+  if (typeof cue.fontSizeScale === 'number' && Number.isFinite(cue.fontSizeScale)) {
+    scale = Math.max(0.65, Math.min(1.6, cue.fontSizeScale));
+  }
+
+  let depthBehind = Boolean(style.depthBehindSubject);
+  let depthOrder: CaptionDepthLayeringOrder =
+    style.depthLayeringOrder || 'weave-active-front';
+  if (cue.depthOverride === 'weave') {
+    depthBehind = true;
+    depthOrder = 'weave-active-front';
+  } else if (cue.depthOverride === 'behind') {
+    depthBehind = true;
+    depthOrder = 'all-behind';
+  } else if (cue.depthOverride === 'front') {
+    depthBehind = false;
+  }
+
+  const placementLabel: 'TOP' | 'MID' | 'BOT' | 'CUSTOM' =
+    yPos <= 32 ? 'TOP' : yPos >= 66 ? 'BOT' : Math.abs(yPos - 48) <= 10 ? 'MID' : 'CUSTOM';
+
+  return {
+    xPosition: xPos,
+    yPosition: yPos,
+    fontSizeScale: scale,
+    activeWordColor: cue.customActiveColor || style.activeWordColor,
+    depthBehindSubject: depthBehind,
+    depthLayeringOrder: depthOrder,
+    placementLabel,
+  };
+}
+
+export function applyDynamicPositionPresetToCues(
+  cues: CaptionCue[],
+  preset:
+    | 'hook-top-body-bottom'
+    | 'hook-center-body-bottom'
+    | 'alternating-zones'
+    | 'all-top'
+    | 'all-center'
+    | 'all-bottom'
+    | 'reset-global'
+    | 'reset-custom'
+): CaptionCue[] {
+  return cues.map((cue, idx) => {
+    if (preset === 'reset-global' || preset === 'reset-custom') {
+      const rest = { ...cue };
+      delete rest.yPosition;
+      delete rest.xPosition;
+      delete rest.fontSizeScale;
+      return rest;
+    }
+    if (preset === 'hook-top-body-bottom') {
+      const isIntro = idx === 0 || cue.start < 3.9;
+      return {
+        ...cue,
+        yPosition: isIntro ? 22 : 76,
+        fontSizeScale: isIntro ? 1.18 : 1.0,
+      };
+    }
+    if (preset === 'hook-center-body-bottom') {
+      const isIntro = idx === 0 || cue.start < 3.9;
+      return {
+        ...cue,
+        yPosition: isIntro ? 45 : 78,
+        fontSizeScale: isIntro ? 1.2 : 1.0,
+      };
+    }
+    if (preset === 'alternating-zones') {
+      const zones = [22, 48, 76];
+      return {
+        ...cue,
+        yPosition: zones[idx % zones.length],
+        fontSizeScale: idx === 0 ? 1.15 : 1.0,
+      };
+    }
+    if (preset === 'all-top') {
+      return { ...cue, yPosition: 22 };
+    }
+    if (preset === 'all-center') {
+      return { ...cue, yPosition: 48 };
+    }
+    return { ...cue, yPosition: 78 };
+  });
+}
+
+export function computeVideoFrameTransform(
+  editConfig: VideoEditConfig,
+  activeCueIndex: number,
+  totalDurationSec: number
+): {
+  effectiveZoom: number;
+  panXPxRatio: number;
+  panYPxRatio: number;
+  mirrorScaleX: number;
+  cssFilter: string;
+  trimStartSec: number;
+  trimEndSec: number;
+} {
+  const baseZoom = Math.max(1, Math.min(2.2, Number(editConfig.zoom) || 1));
+  const jumpCutBoost =
+    editConfig.autoJumpCutZoom && activeCueIndex >= 0 && activeCueIndex % 2 === 1
+      ? 1.14
+      : 1;
+  const effectiveZoom = Number((baseZoom * jumpCutBoost).toFixed(3));
+  const panXPxRatio = Math.max(-45, Math.min(45, Number(editConfig.panX) || 0)) / 100;
+  const panYPxRatio = Math.max(-45, Math.min(45, Number(editConfig.panY) || 0)) / 100;
+  const mirrorScaleX = editConfig.mirrorHorizontal ? -1 : 1;
+
+  let b = Number(editConfig.brightness) || 100;
+  let c = Number(editConfig.contrast) || 100;
+  let s = Number(editConfig.saturation) || 100;
+  let extraFilter = '';
+
+  if (editConfig.colorPreset === 'viral-crisp') {
+    b = Math.round(b * 1.04);
+    c = Math.round(c * 1.16);
+    s = Math.round(s * 1.22);
+  } else if (editConfig.colorPreset === 'cinema-teal-gold') {
+    c = Math.round(c * 1.14);
+    s = Math.round(s * 1.12);
+    extraFilter = ' sepia(14%) hue-rotate(-8deg)';
+  } else if (editConfig.colorPreset === 'moody-matte') {
+    b = Math.round(b * 0.92);
+    c = Math.round(c * 1.18);
+    s = Math.round(s * 0.78);
+  } else if (editConfig.colorPreset === 'warm-glow') {
+    b = Math.round(b * 1.05);
+    s = Math.round(s * 1.18);
+    extraFilter = ' sepia(22%)';
+  } else if (editConfig.colorPreset === 'bw-docu') {
+    c = Math.round(c * 1.22);
+    s = 0;
+    extraFilter = ' grayscale(100%)';
+  }
+
+  const isDefaultFilter =
+    b === 100 && c === 100 && s === 100 && extraFilter === '';
+  const cssFilter = isDefaultFilter
+    ? 'none'
+    : `brightness(${b}%) contrast(${c}%) saturate(${s}%)${extraFilter}`;
+
+  const safeDur = Math.max(0.5, Number(totalDurationSec) || 16);
+  const trimStartSec = Math.max(
+    0,
+    Math.min(safeDur - 0.3, Number(editConfig.trimStart) || 0)
+  );
+  const rawEnd = Number(editConfig.trimEnd) || 0;
+  const trimEndSec =
+    rawEnd > trimStartSec + 0.2 && rawEnd <= safeDur ? rawEnd : safeDur;
+
+  return {
+    effectiveZoom,
+    panXPxRatio,
+    panYPxRatio,
+    mirrorScaleX,
+    cssFilter,
+    trimStartSec,
+    trimEndSec,
+  };
 }
 
 export const DEFAULT_STYLE_PRESETS: Record<
@@ -1200,6 +1455,11 @@ export function normalizeCues(
     text: string;
     words?: WordTiming[];
     speaker?: string;
+    yPosition?: number;
+    xPosition?: number;
+    fontSizeScale?: number;
+    customActiveColor?: string;
+    depthOverride?: 'auto' | 'weave' | 'behind' | 'front';
   }>
 ): CaptionCue[] {
   return rawCues
@@ -1219,6 +1479,11 @@ export function normalizeCues(
         text,
         words,
         speaker: c.speaker,
+        yPosition: c.yPosition,
+        xPosition: c.xPosition,
+        fontSizeScale: c.fontSizeScale,
+        customActiveColor: c.customActiveColor,
+        depthOverride: c.depthOverride,
       };
     })
     .filter((c) => c.text.length > 0);
@@ -1536,14 +1801,31 @@ export function regroupCuesByMaxWords(
   maxWordsPerCue: number
 ): CaptionCue[] {
   const limit = Math.max(1, Math.min(15, Math.floor(maxWordsPerCue)));
-  const allWords: WordTiming[] = [];
+  const allWords: Array<
+    WordTiming & {
+      yPosition?: number;
+      xPosition?: number;
+      fontSizeScale?: number;
+      customActiveColor?: string;
+      depthOverride?: 'auto' | 'weave' | 'behind' | 'front';
+    }
+  > = [];
 
   for (const cue of cues) {
     const words =
       cue.words && cue.words.length > 0
         ? cue.words
         : computeWordTimings(cue.text, cue.start, cue.end);
-    allWords.push(...words);
+    for (const w of words) {
+      allWords.push({
+        ...w,
+        yPosition: cue.yPosition,
+        xPosition: cue.xPosition,
+        fontSizeScale: cue.fontSizeScale,
+        customActiveColor: cue.customActiveColor,
+        depthOverride: cue.depthOverride,
+      });
+    }
   }
 
   if (allWords.length === 0) return [];
@@ -1553,9 +1835,14 @@ export function regroupCuesByMaxWords(
     end: number;
     text: string;
     words: WordTiming[];
+    yPosition?: number;
+    xPosition?: number;
+    fontSizeScale?: number;
+    customActiveColor?: string;
+    depthOverride?: 'auto' | 'weave' | 'behind' | 'front';
   }> = [];
 
-  let currentChunk: WordTiming[] = [];
+  let currentChunk: typeof allWords = [];
   for (let i = 0; i < allWords.length; i++) {
     const w = allWords[i];
     currentChunk.push(w);
@@ -1569,11 +1856,17 @@ export function regroupCuesByMaxWords(
       hasLongGap ||
       i === allWords.length - 1
     ) {
+      const firstMeta = currentChunk[0];
       regrouped.push({
         start: currentChunk[0].start,
         end: currentChunk[currentChunk.length - 1].end,
         text: currentChunk.map((item) => item.word).join(' '),
-        words: currentChunk,
+        words: currentChunk.map(({ word, start, end }) => ({ word, start, end })),
+        yPosition: firstMeta.yPosition,
+        xPosition: firstMeta.xPosition,
+        fontSizeScale: firstMeta.fontSizeScale,
+        customActiveColor: firstMeta.customActiveColor,
+        depthOverride: firstMeta.depthOverride,
       });
       currentChunk = [];
     }

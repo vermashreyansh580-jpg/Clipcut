@@ -225,7 +225,14 @@ test('safeParseResponseJson gracefully handles HTML error pages without throwing
   assert.equal(parsedJson.count, 3);
 });
 
-import { DEFAULT_STYLE_PRESETS, getDemoShowcaseCues } from './subtitles';
+import {
+  DEFAULT_STYLE_PRESETS,
+  DEFAULT_VIDEO_EDIT_CONFIG,
+  getDemoShowcaseCues,
+  resolveCuePlacement,
+  applyDynamicPositionPresetToCues,
+  computeVideoFrameTransform,
+} from './subtitles';
 
 test('DEFAULT_STYLE_PRESETS provides 30 Creator, 3D Obstacle Weave, Kinetic, and Viral styles + multi-language demo cues', () => {
   const keys = Object.keys(DEFAULT_STYLE_PRESETS);
@@ -246,4 +253,57 @@ test('DEFAULT_STYLE_PRESETS provides 30 Creator, 3D Obstacle Weave, Kinetic, and
   assert.equal(tamilCues.length, 4);
   assert.ok(tamilCues[0].text.includes('CapTanz'));
 });
+
+test('resolveCuePlacement and applyDynamicPositionPresetToCues place intro hook captions at Top and body captions at Bottom or per-cue custom positions', () => {
+  const rawCues = getDemoShowcaseCues('hinglish');
+  const hookTopCues = applyDynamicPositionPresetToCues(
+    rawCues,
+    'hook-top-body-bottom'
+  );
+  assert.equal(hookTopCues[0].yPosition, 22);
+  assert.equal(hookTopCues[0].fontSizeScale, 1.18);
+  assert.equal(hookTopCues[2].yPosition, 76);
+
+  const style = {
+    ...DEFAULT_STYLE_PRESETS['creator-obstacle-weave'].config,
+    dynamicLayoutMode: 'hook-top-body-bottom' as const,
+  };
+  const resolvedFirst = resolveCuePlacement(rawCues[0], 0, style);
+  const resolvedThird = resolveCuePlacement(rawCues[2], 2, style);
+  assert.ok(resolvedFirst.yPosition <= 25);
+  assert.ok(resolvedFirst.fontSizeScale > 1.1);
+  assert.equal(resolvedThird.yPosition, 76);
+
+  // Explicit per-cue override takes highest priority
+  const customCue = { ...rawCues[2], yPosition: 18, fontSizeScale: 1.25, depthOverride: 'front' as const };
+  const resolvedCustom = resolveCuePlacement(customCue, 2, style);
+  assert.equal(resolvedCustom.yPosition, 18);
+  assert.equal(resolvedCustom.fontSizeScale, 1.25);
+  assert.equal(resolvedCustom.depthBehindSubject, false);
+});
+
+test('computeVideoFrameTransform calculates camera zoom, auto jump-cut punch-in, mirror flip, trim bounds, and cinema color grading filter', () => {
+  const editCfg = {
+    ...DEFAULT_VIDEO_EDIT_CONFIG,
+    zoom: 1.2,
+    panX: 10,
+    panY: -10,
+    autoJumpCutZoom: true,
+    mirrorHorizontal: true,
+    colorPreset: 'cinema-teal-gold' as const,
+    trimStart: 1.5,
+    trimEnd: 8.5,
+  };
+
+  const evenCueTransform = computeVideoFrameTransform(editCfg, 0, 12);
+  const oddCueTransform = computeVideoFrameTransform(editCfg, 1, 12);
+
+  assert.equal(evenCueTransform.effectiveZoom, 1.2);
+  assert.ok(oddCueTransform.effectiveZoom > 1.35); // 1.2 * 1.14 auto jump-cut punch-in
+  assert.equal(evenCueTransform.mirrorScaleX, -1);
+  assert.equal(evenCueTransform.trimStartSec, 1.5);
+  assert.equal(evenCueTransform.trimEndSec, 8.5);
+  assert.ok(evenCueTransform.cssFilter.includes('contrast'));
+});
+
 
