@@ -12,6 +12,8 @@ import {
   fixVideoDurationMetadata,
   resolveCuePlacement,
   computeVideoFrameTransform,
+  resolveActiveWordIndex,
+  resolveActiveVideoSegment,
 } from '@/lib/subtitles';
 import {
   Play,
@@ -89,6 +91,7 @@ export default function CaptionCanvasPlayer({
   const exportingRef = useRef(isExportingVideo);
   const playingRef = useRef(isPlaying);
   const transcribingRef = useRef(isTranscribing);
+  const lastSpokenCueIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     cuesRef.current = cues;
@@ -348,13 +351,36 @@ export default function CaptionCanvasPlayer({
       const activeCues = cuesRef.current;
       const editCfg = videoEditRef.current || DEFAULT_VIDEO_EDIT_CONFIG;
 
-      // Determine active cue & cue index first so Auto Jump-Cut Zoom & Per-Cue Placement sync
+      // Apply real-time voice-to-caption sync offset (default +40ms audio-visual compensation)
+      const voiceTime = Math.max(
+        0,
+        nowSec + (editCfg.voiceSyncOffsetMs ?? 40) / 1000
+      );
+
+      // Determine active cue & cue index using voice-synced time
       const { cue: matchedCue, index: activeCueIdx } = findActiveCueForTime(
         activeCues,
-        nowSec,
+        voiceTime,
         !exportingRef.current && !playingRef.current
       );
       let activeCue = matchedCue;
+
+      const segState = resolveActiveVideoSegment(
+        editCfg.segments,
+        nowSec,
+        durationRef.current || 10
+      );
+      const segZoom = segState.segment ? Math.max(0.8, segState.segment.zoom || 1) : 1;
+      const segTransition = segState.segment?.transition || 'none';
+      const segTransProgress = segState.transitionProgress;
+      const punchTransitionZoom =
+        segTransition === 'zoom-punch' && segTransProgress < 1
+          ? 1 + (1 - segTransProgress) * 0.24
+          : 1;
+      const whipOffsetX =
+        segTransition === 'whip-left' && segTransProgress < 1
+          ? (1 - segTransProgress) * (1 - segTransProgress) * width * 0.35
+          : 0;
 
       const frameTransform = computeVideoFrameTransform(
         editCfg,
@@ -362,7 +388,7 @@ export default function CaptionCanvasPlayer({
         durationRef.current || 10
       );
 
-      // 1. Background / Video layer (Strictly NO watermark) with Video Editing Transforms
+      // 1. Background / Video layer (Strictly NO watermark) with Video Editing & Segment Transforms
       ctx.fillStyle = '#0B1120';
       ctx.fillRect(0, 0, width, height);
 
@@ -374,13 +400,16 @@ export default function CaptionCanvasPlayer({
         ctx.filter = frameTransform.cssFilter;
       }
 
-      // Apply Camera Zoom, Pan X/Y, Auto Jump-Cut Zoom, and Horizontal Mirror Flip
-      const centerX = width / 2 + frameTransform.panXPxRatio * width;
+      // Apply Camera Zoom, Per-Segment Zoom, Transition Punch, Pan X/Y, Auto Jump-Cut Zoom, and Mirror Flip
+      const combinedZoom =
+        frameTransform.effectiveZoom * segZoom * punchTransitionZoom;
+      const centerX =
+        width / 2 + frameTransform.panXPxRatio * width + whipOffsetX;
       const centerY = height / 2 + frameTransform.panYPxRatio * height;
       ctx.translate(centerX, centerY);
       ctx.scale(
-        frameTransform.effectiveZoom * frameTransform.mirrorScaleX,
-        frameTransform.effectiveZoom
+        combinedZoom * frameTransform.mirrorScaleX,
+        combinedZoom
       );
       ctx.translate(-width / 2, -height / 2);
 
@@ -545,7 +574,7 @@ export default function CaptionCanvasPlayer({
       const rawCueProgress =
         activeCue.id === 'preview-guide'
           ? (nowSec % 4) / 4
-          : Math.min(1, Math.max(0, (nowSec - activeCue.start) / cueDur));
+          : Math.min(1, Math.max(0, (voiceTime - activeCue.start) / cueDur));
 
       const words =
         activeCue.words && activeCue.words.length > 0
@@ -586,26 +615,23 @@ export default function CaptionCanvasPlayer({
         wordIndex: number;
       }
 
-      const anyWordDirectlyActive = words.some(
-        (w) => nowSec >= w.start - 0.04 && nowSec <= w.end + 0.04
-      );
+      const activeWordState = resolveActiveWordIndex(words, voiceTime);
 
       const measuredWords: MeasuredWord[] = words.map((w, wordIndex) => {
         const rawText = style.uppercase ? w.word.toUpperCase() : w.word;
         const isActive =
           activeCue.id === 'preview-guide'
             ? wordIndex === Math.min(1, words.length - 1)
-            : anyWordDirectlyActive
-              ? nowSec >= w.start - 0.04 && nowSec <= w.end + 0.04
-              : wordIndex === Math.min(1, words.length - 1);
+            : wordIndex === activeWordState.activeIndex;
         const isPast =
-          activeCue.id === 'preview-guide' ? wordIndex === 0 : nowSec > w.end;
-        const wordDur = Math.max(0.05, w.end - w.start);
+          activeCue.id === 'preview-guide'
+            ? wordIndex === 0
+            : wordIndex < activeWordState.activeIndex;
         const progress =
           activeCue.id === 'preview-guide'
             ? 0.5
             : isActive
-              ? Math.min(1, Math.max(0, (nowSec - w.start) / wordDur))
+              ? activeWordState.progress
               : isPast
                 ? 1
                 : 0;
@@ -1071,6 +1097,60 @@ export default function CaptionCanvasPlayer({
         // Pass 4: Draw words that pop IN FRONT OF the obstacles ON TOP of Pass 3!
         renderCaptionLines('front-only');
       }
+
+      // 5. Render Multi-Track Text Stickers / Callout Overlays (FX1 Track)
+      if (editCfg.overlays && editCfg.overlays.length > 0) {
+        for (const ov of editCfg.overlays) {
+          if (nowSec >= ov.start && nowSec <= ov.end) {
+            ctx.save();
+            const ovFontPx = Math.round(28 * scaleFactor * (ov.scale || 1));
+            ctx.font = `800 ${ovFontPx}px "Montserrat", sans-serif`;
+            ctx.textBaseline = 'middle';
+            const textW = ctx.measureText(ov.text).width;
+            const padX = Math.round(16 * scaleFactor);
+            const padY = Math.round(10 * scaleFactor);
+            const boxW = textW + padX * 2;
+            const boxH = ovFontPx + padY * 1.4;
+            const cx = (Math.max(15, Math.min(85, ov.xPosition)) / 100) * width;
+            const cy = (Math.max(12, Math.min(88, ov.yPosition)) / 100) * height;
+
+            const elapsedOv = Math.max(0, nowSec - ov.start);
+            const popScale =
+              elapsedOv < 0.18
+                ? 0.8 + Math.sin((elapsedOv / 0.18) * Math.PI) * 0.28
+                : 1;
+
+            ctx.translate(cx, cy);
+            ctx.scale(popScale, popScale);
+            ctx.fillStyle = ov.bgColor || '#E11D48';
+            ctx.shadowColor = 'rgba(0,0,0,0.45)';
+            ctx.shadowBlur = 14;
+            ctx.beginPath();
+            ctx.roundRect(-boxW / 2, -boxH / 2, boxW, boxH, 10);
+            ctx.fill();
+
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = ov.textColor || '#FFFFFF';
+            ctx.fillText(ov.text, -textW / 2, 1);
+            ctx.restore();
+          }
+        }
+      }
+
+      // 6. Render Segment Transition FX (Flash / Fade) at clip boundaries
+      if (segTransProgress < 1 && segTransition !== 'none') {
+        if (segTransition === 'flash') {
+          ctx.save();
+          ctx.fillStyle = `rgba(255, 255, 255, ${((1 - segTransProgress) * 0.72).toFixed(2)})`;
+          ctx.fillRect(0, 0, width, height);
+          ctx.restore();
+        } else if (segTransition === 'fade') {
+          ctx.save();
+          ctx.fillStyle = `rgba(2, 6, 23, ${((1 - segTransProgress) * 0.85).toFixed(2)})`;
+          ctx.fillRect(0, 0, width, height);
+          ctx.restore();
+        }
+      }
     },
     [mediaType, findActiveCueForTime]
   );
@@ -1138,7 +1218,44 @@ export default function CaptionCanvasPlayer({
         editCfg.trimEnd && editCfg.trimEnd > trimStart + 0.25
           ? Math.min(maxDur, editCfg.trimEnd)
           : maxDur;
-      const rate = Math.max(0.5, Math.min(2, editCfg.playbackRate || 1));
+
+      // Resolve active clip segment (supports nonlinear split, cut/delete skipping, and per-clip speed)
+      const segCheck = resolveActiveVideoSegment(
+        editCfg.segments,
+        timeRef.current,
+        maxDur
+      );
+      if (segCheck.nextPlayableStart !== null) {
+        const jumpTarget = segCheck.nextPlayableStart;
+        if (jumpTarget >= trimEnd - 0.05) {
+          if (vid) {
+            vid.pause();
+            vid.currentTime = trimStart;
+          }
+          if (aud) {
+            aud.pause();
+            aud.currentTime = trimStart;
+          }
+          timeRef.current = trimStart;
+          setIsPlaying(false);
+          onTimeUpdate(trimStart);
+          return;
+        }
+        timeRef.current = jumpTarget;
+        if (vid && mediaType === 'video') vid.currentTime = jumpTarget;
+        if (aud && mediaType === 'audio') aud.currentTime = jumpTarget;
+      }
+
+      const segSpeed = segCheck.segment?.speed || 1;
+      const rate = Math.max(
+        0.25,
+        Math.min(3, (editCfg.playbackRate || 1) * segSpeed)
+      );
+      const effectiveMuted = isMuted || Boolean(segCheck.segment?.muted);
+      if (vid && vid.muted !== effectiveMuted) vid.muted = effectiveMuted;
+      if (aud && aud.muted !== effectiveMuted) aud.muted = effectiveMuted;
+      if (vid && Math.abs(vid.playbackRate - rate) > 0.02) vid.playbackRate = rate;
+      if (aud && Math.abs(aud.playbackRate - rate) > 0.02) aud.playbackRate = rate;
 
       let nextTime = timeRef.current;
       if (mediaType === 'video' && vid && !vid.paused) {
@@ -1167,6 +1284,37 @@ export default function CaptionCanvasPlayer({
 
       timeRef.current = nextTime;
 
+      // Built-in Showcase Demo Voiceover Synthesis (when no external file is uploaded)
+      if (
+        !mediaUrl &&
+        !effectiveMuted &&
+        typeof window !== 'undefined' &&
+        'speechSynthesis' in window
+      ) {
+        const voiceT = Math.max(
+          0,
+          nextTime + (editCfg.voiceSyncOffsetMs ?? 40) / 1000
+        );
+        const { cue: activeVoiceCue } = findActiveCueForTime(
+          cuesRef.current,
+          voiceT,
+          false
+        );
+        if (
+          activeVoiceCue &&
+          activeVoiceCue.id !== lastSpokenCueIdRef.current
+        ) {
+          lastSpokenCueIdRef.current = activeVoiceCue.id;
+          try {
+            window.speechSynthesis.cancel();
+            const utter = new SpeechSynthesisUtterance(activeVoiceCue.text);
+            const cueSpan = Math.max(0.6, activeVoiceCue.end - activeVoiceCue.start);
+            utter.rate = Math.min(1.6, Math.max(0.95, (1.8 / cueSpan) * rate));
+            window.speechSynthesis.speak(utter);
+          } catch {}
+        }
+      }
+
       const canvas = canvasRef.current;
       if (canvas) {
         const ctx = canvas.getContext('2d', { alpha: false });
@@ -1175,7 +1323,7 @@ export default function CaptionCanvasPlayer({
         }
       }
 
-      if (now - lastUiSync >= 120) {
+      if (now - lastUiSync >= 90) {
         lastUiSync = now;
         onTimeUpdate(nextTime);
       }
@@ -1186,8 +1334,24 @@ export default function CaptionCanvasPlayer({
     };
 
     rafId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafId);
-  }, [isPlaying, isExportingVideo, mediaType, onTimeUpdate, drawFrame]);
+    return () => {
+      cancelAnimationFrame(rafId);
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        try {
+          window.speechSynthesis.cancel();
+        } catch {}
+      }
+    };
+  }, [
+    isPlaying,
+    isExportingVideo,
+    isMuted,
+    mediaUrl,
+    mediaType,
+    onTimeUpdate,
+    drawFrame,
+    findActiveCueForTime,
+  ]);
 
   // Resolve real duration on mobile when <video> / <audio> reports Infinity or 0
   const resolveMediaElementDuration = useCallback(
@@ -1423,10 +1587,23 @@ export default function CaptionCanvasPlayer({
       await new Promise<void>((resolve) => {
         const step = () => {
           const elapsed = (performance.now() - startPerf) / 1000;
-          const nowT =
+          let nowT =
             mediaEl && !mediaEl.paused && !mediaEl.ended
               ? mediaEl.currentTime
               : trimStart + elapsed * rate;
+
+          // Respect deleted/cut segments during watermark-free video export
+          const segCheck = resolveActiveVideoSegment(
+            editCfg.segments,
+            nowT,
+            fullDuration
+          );
+          if (segCheck.nextPlayableStart !== null) {
+            nowT = segCheck.nextPlayableStart;
+            if (mediaEl && nowT < trimEnd) {
+              mediaEl.currentTime = nowT;
+            }
+          }
 
           drawFrame(ctx, canvas.width, canvas.height, nowT);
 

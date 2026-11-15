@@ -306,4 +306,71 @@ test('computeVideoFrameTransform calculates camera zoom, auto jump-cut punch-in,
   assert.ok(evenCueTransform.cssFilter.includes('contrast'));
 });
 
+import {
+  resolveActiveWordIndex,
+  createDefaultVideoSegments,
+  splitVideoSegmentAtTime,
+  splitCaptionCueAtTime,
+  resolveActiveVideoSegment,
+} from './subtitles';
+
+test('resolveActiveWordIndex progresses monotonically with voice and never jumps backward to index 1 during micro-pauses', () => {
+  const words = [
+    { word: 'Yeh', start: 1.0, end: 1.3 },
+    { word: 'video', start: 1.35, end: 1.7 },
+    { word: 'voice', start: 1.85, end: 2.2 },
+    { word: 'ke', start: 2.25, end: 2.5 },
+    { word: 'saath', start: 2.6, end: 3.0 },
+  ];
+
+  // Before first word
+  assert.equal(resolveActiveWordIndex(words, 0.9).activeIndex, 0);
+  // Inside word 0
+  assert.equal(resolveActiveWordIndex(words, 1.15).activeIndex, 0);
+  // In micro-pause between word 2 ('voice', ends 2.2) and word 3 ('ke', starts 2.25)
+  const midGap = resolveActiveWordIndex(words, 2.21);
+  assert.equal(midGap.activeIndex, 2); // Stays on word 2 instead of jumping backward to word 1!
+  // Inside word 4 ('saath')
+  assert.equal(resolveActiveWordIndex(words, 2.8).activeIndex, 4);
+  // After last word
+  assert.equal(resolveActiveWordIndex(words, 3.2).activeIndex, 4);
+});
+
+test('splitVideoSegmentAtTime, splitCaptionCueAtTime, and resolveActiveVideoSegment support nonlinear video & caption editing inside the website', () => {
+  const baseSegs = createDefaultVideoSegments(12);
+  assert.equal(baseSegs.length, 1);
+
+  // Split video clip at 4.5s
+  const splitSegs = splitVideoSegmentAtTime(baseSegs, 4.5, 12);
+  assert.equal(splitSegs.length, 2);
+  assert.equal(splitSegs[0].start, 0);
+  assert.equal(splitSegs[0].end, 4.5);
+  assert.equal(splitSegs[1].start, 4.5);
+  assert.equal(splitSegs[1].end, 12);
+  assert.equal(splitSegs[1].transition, 'zoom-punch');
+
+  // Mark first segment as deleted/cut and verify resolveActiveVideoSegment skips to 4.5s
+  const withDeletedFirst = [
+    { ...splitSegs[0], deleted: true },
+    splitSegs[1],
+  ];
+  const resolvedAt1s = resolveActiveVideoSegment(withDeletedFirst, 1.2, 12);
+  assert.equal(resolvedAt1s.nextPlayableStart, 4.5);
+
+  const resolvedAt5s = resolveActiveVideoSegment(withDeletedFirst, 4.6, 12);
+  assert.equal(resolvedAt5s.nextPlayableStart, null);
+  assert.equal(resolvedAt5s.segment?.start, 4.5);
+  assert.ok(resolvedAt5s.transitionProgress < 1);
+
+  // Split a subtitle cue at playhead
+  const cues = parseSubtitleFile(
+    `1\n00:00:01,000 --> 00:00:05,000\nOne two three four`
+  );
+  const splitCues = splitCaptionCueAtTime(cues, 3.0);
+  assert.equal(splitCues.length, 2);
+  assert.ok(splitCues[0].end <= 3.1 && splitCues[0].end >= 2.5);
+  assert.equal(splitCues[0].end, splitCues[1].start);
+});
+
+
 

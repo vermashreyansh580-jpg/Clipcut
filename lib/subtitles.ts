@@ -34,6 +34,37 @@ export type VideoColorFilterPreset =
   | 'warm-glow'
   | 'bw-docu';
 
+export type VideoTransitionType =
+  | 'none'
+  | 'flash'
+  | 'zoom-punch'
+  | 'fade'
+  | 'whip-left';
+
+export interface VideoClipSegment {
+  id: string;
+  start: number;
+  end: number;
+  speed: number; // 0.5 to 2.0
+  zoom: number; // 1.0 to 1.8
+  muted: boolean;
+  deleted: boolean;
+  transition: VideoTransitionType;
+  label?: string;
+}
+
+export interface VideoTextOverlay {
+  id: string;
+  text: string;
+  start: number;
+  end: number;
+  xPosition: number; // 15 to 85 (% from left)
+  yPosition: number; // 12 to 88 (% from top)
+  bgColor: string;
+  textColor: string;
+  scale: number; // 0.8 to 1.5
+}
+
 export interface VideoEditConfig {
   trimStart: number; // start time in seconds (default 0)
   trimEnd: number; // end time in seconds (0 = full duration)
@@ -49,6 +80,9 @@ export interface VideoEditConfig {
   saturation: number; // 0 to 200 (default 100)
   vignette: number; // 0 to 80 (default 0)
   letterbox: number; // 0 to 16 (% black cinema bars top & bottom)
+  voiceSyncOffsetMs: number; // -500 to +500 ms lead/lag adjustment for exact voice-to-caption lock
+  segments?: VideoClipSegment[];
+  overlays?: VideoTextOverlay[];
 }
 
 export const DEFAULT_VIDEO_EDIT_CONFIG: VideoEditConfig = {
@@ -66,6 +100,9 @@ export const DEFAULT_VIDEO_EDIT_CONFIG: VideoEditConfig = {
   saturation: 100,
   vignette: 0,
   letterbox: 0,
+  voiceSyncOffsetMs: 40,
+  segments: [],
+  overlays: [],
 };
 
 export type CaptionStylePreset =
@@ -1758,7 +1795,7 @@ export function mergeSubtitleLists(
 
 export function bridgeContinuousCueGaps(
   cues: CaptionCue[],
-  maxBridgeSeconds = 1.5
+  maxBridgeSeconds = 0.65
 ): CaptionCue[] {
   if (cues.length <= 1) return cues;
   const cloned: CaptionCue[] = cues.map((c) => ({
@@ -1770,16 +1807,17 @@ export function bridgeContinuousCueGaps(
     const curr = cloned[i];
     const next = cloned[i + 1];
     const gap = next.start - curr.end;
+    // Bridge short inter-sentence pauses for visual stability without stretching acoustic word end times across silence
     if (gap > 0 && gap <= maxBridgeSeconds) {
       curr.end = Number(next.start.toFixed(3));
-      if (curr.words.length > 0) {
+      if (curr.words.length > 0 && gap <= 0.18) {
         curr.words[curr.words.length - 1].end = curr.end;
       }
     }
     for (let wIdx = 0; wIdx < curr.words.length - 1; wIdx++) {
       const wCurr = curr.words[wIdx];
       const wNext = curr.words[wIdx + 1];
-      if (wNext.start > wCurr.end && wNext.start - wCurr.end <= 0.6) {
+      if (wNext.start > wCurr.end && wNext.start - wCurr.end <= 0.16) {
         wCurr.end = wNext.start;
       }
     }
@@ -1788,7 +1826,7 @@ export function bridgeContinuousCueGaps(
   for (let wIdx = 0; wIdx < lastCue.words.length - 1; wIdx++) {
     const wCurr = lastCue.words[wIdx];
     const wNext = lastCue.words[wIdx + 1];
-    if (wNext.start > wCurr.end && wNext.start - wCurr.end <= 0.6) {
+    if (wNext.start > wCurr.end && wNext.start - wCurr.end <= 0.16) {
       wCurr.end = wNext.start;
     }
   }
@@ -2448,7 +2486,7 @@ export function applyProofreadOrTranslatedCues(
     const finalText = candidate && candidate.length > 0 ? candidate : fallbackText;
     const newTokens = finalText.split(/\s+/).filter(Boolean);
 
-    // If token count matches existing Whisper word timings, keep exact Whisper word timestamps
+    // Preserve exact acoustic word timestamps whenever possible so captions match the spoken voice in real time
     let words: WordTiming[];
     if (c.words && c.words.length === newTokens.length && newTokens.length > 0) {
       words = c.words.map((w, wIdx) => ({
@@ -2456,6 +2494,14 @@ export function applyProofreadOrTranslatedCues(
         start: w.start,
         end: w.end,
       }));
+    } else if (c.words && c.words.length > 0 && newTokens.length > 0) {
+      // Proportional mapping onto original acoustic word span so silence gaps never skew voice timing
+      const acousticStart = c.words[0].start;
+      const acousticEnd = Math.max(
+        acousticStart + 0.12,
+        c.words[c.words.length - 1].end
+      );
+      words = computeWordTimings(finalText, acousticStart, acousticEnd);
     } else {
       words = computeWordTimings(finalText, c.start, c.end);
     }
@@ -2470,7 +2516,7 @@ export function applyProofreadOrTranslatedCues(
     };
   });
 
-  return bridgeContinuousCueGaps(normalizeCues(merged), 2.2);
+  return bridgeContinuousCueGaps(normalizeCues(merged), 0.55);
 }
 
 /**
@@ -2809,3 +2855,222 @@ export function calculateSubtitleMetrics(cues: CaptionCue[]): SubtitleMetrics {
     fastCueIds,
   };
 }
+
+/**
+ * Deterministic, monotonic voice-to-word index resolver.
+ * Never jumps backward to word #2 during brief inter-word micro-pauses.
+ */
+export function resolveActiveWordIndex(
+  words: WordTiming[],
+  nowSec: number
+): { activeIndex: number; progress: number } {
+  if (!words || words.length === 0) {
+    return { activeIndex: 0, progress: 0 };
+  }
+  if (nowSec <= words[0].start) {
+    return { activeIndex: 0, progress: 0 };
+  }
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    if (nowSec >= w.start && nowSec <= w.end) {
+      const dur = Math.max(0.04, w.end - w.start);
+      return {
+        activeIndex: i,
+        progress: Math.min(1, Math.max(0, (nowSec - w.start) / dur)),
+      };
+    }
+    const next = words[i + 1];
+    if (next && nowSec > w.end && nowSec < next.start) {
+      // During a brief breath/micro-pause between word i and word i+1, stay on word i (or snap to i+1 if within 35ms)
+      if (next.start - nowSec <= 0.035) {
+        return { activeIndex: i + 1, progress: 0.05 };
+      }
+      return { activeIndex: i, progress: 1 };
+    }
+  }
+  return { activeIndex: words.length - 1, progress: 1 };
+}
+
+export function createDefaultVideoSegments(
+  durationSec: number
+): VideoClipSegment[] {
+  const safeDur = Number(Math.max(1, durationSec || 10).toFixed(2));
+  return [
+    {
+      id: 'seg-1',
+      start: 0,
+      end: safeDur,
+      speed: 1,
+      zoom: 1,
+      muted: false,
+      deleted: false,
+      transition: 'none',
+      label: 'Clip 1',
+    },
+  ];
+}
+
+/**
+ * Splits the active video segment at `splitTimeSec` into two independent timeline clips
+ * so the user can cut, delete, speed-ramp, zoom, or add transitions to each clip inside the website.
+ */
+export function splitVideoSegmentAtTime(
+  segments: VideoClipSegment[],
+  splitTimeSec: number,
+  durationSec: number
+): VideoClipSegment[] {
+  const base =
+    segments && segments.length > 0
+      ? segments
+      : createDefaultVideoSegments(durationSec);
+  const splitT = Number(splitTimeSec.toFixed(2));
+  const out: VideoClipSegment[] = [];
+
+  for (const seg of base) {
+    if (splitT > seg.start + 0.25 && splitT < seg.end - 0.25) {
+      out.push({
+        ...seg,
+        id: `${seg.id}-a`,
+        end: splitT,
+      });
+      out.push({
+        ...seg,
+        id: `seg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        start: splitT,
+        end: seg.end,
+        transition: 'zoom-punch',
+      });
+    } else {
+      out.push({ ...seg });
+    }
+  }
+
+  return out.map((s, idx) => ({
+    ...s,
+    label: `Clip ${idx + 1}`,
+  }));
+}
+
+/**
+ * Splits a subtitle cue at `splitTimeSec` into two accurately timed cues at the playhead.
+ */
+export function splitCaptionCueAtTime(
+  cues: CaptionCue[],
+  splitTimeSec: number
+): CaptionCue[] {
+  const idx = cues.findIndex(
+    (c) => splitTimeSec > c.start + 0.18 && splitTimeSec < c.end - 0.18
+  );
+  if (idx === -1) return cues;
+
+  const target = cues[idx];
+  const words =
+    target.words && target.words.length > 0
+      ? target.words
+      : computeWordTimings(target.text, target.start, target.end);
+
+  if (words.length <= 1) {
+    const mid = Number(splitTimeSec.toFixed(2));
+    const firstCue: CaptionCue = {
+      ...target,
+      id: `${target.id}-a`,
+      end: mid,
+      words: computeWordTimings(target.text, target.start, mid),
+    };
+    const secondCue: CaptionCue = {
+      ...target,
+      id: `cue-${Date.now()}`,
+      start: mid,
+      end: target.end,
+      words: computeWordTimings(target.text, mid, target.end),
+    };
+    const next = [...cues];
+    next.splice(idx, 1, firstCue, secondCue);
+    return next.map((c, i) => ({ ...c, index: i + 1 }));
+  }
+
+  let splitWordIdx = words.findIndex(
+    (w) => (w.start + w.end) / 2 >= splitTimeSec
+  );
+  if (splitWordIdx <= 0) splitWordIdx = 1;
+  if (splitWordIdx >= words.length) splitWordIdx = words.length - 1;
+
+  const firstWords = words.slice(0, splitWordIdx);
+  const secondWords = words.slice(splitWordIdx);
+  const boundaryTime = Number(splitTimeSec.toFixed(3));
+
+  const firstCue: CaptionCue = {
+    ...target,
+    id: `${target.id}-a`,
+    start: target.start,
+    end: boundaryTime,
+    text: firstWords.map((w) => w.word).join(' '),
+    words: firstWords,
+  };
+  const secondCue: CaptionCue = {
+    ...target,
+    id: `cue-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+    start: boundaryTime,
+    end: target.end,
+    text: secondWords.map((w) => w.word).join(' '),
+    words: secondWords,
+  };
+
+  const next = [...cues];
+  next.splice(idx, 1, firstCue, secondCue);
+  return next.map((c, i) => ({ ...c, index: i + 1 }));
+}
+
+/**
+ * Resolves the active video clip segment for `nowSec`, or returns `nextPlayableStart`
+ * if `nowSec` falls inside a deleted/cut segment so playback jumps seamlessly over cuts.
+ */
+export function resolveActiveVideoSegment(
+  segments: VideoClipSegment[] | undefined,
+  nowSec: number,
+  durationSec: number
+): {
+  segment: VideoClipSegment | null;
+  nextPlayableStart: number | null;
+  transitionProgress: number;
+} {
+  if (!segments || segments.length === 0) {
+    return { segment: null, nextPlayableStart: null, transitionProgress: 1 };
+  }
+
+  const current = segments.find(
+    (s) => nowSec >= s.start - 0.02 && nowSec < s.end + 0.02
+  );
+
+  if (current && !current.deleted) {
+    const elapsedInSeg = Math.max(0, nowSec - current.start);
+    const transDur = 0.32;
+    const transitionProgress =
+      current.transition !== 'none' && elapsedInSeg < transDur
+        ? Math.min(1, elapsedInSeg / transDur)
+        : 1;
+    return {
+      segment: current,
+      nextPlayableStart: null,
+      transitionProgress,
+    };
+  }
+
+  // Current segment is deleted — find the next non-deleted segment after nowSec (or wrap to first non-deleted)
+  const nextActive = segments.find((s) => !s.deleted && s.start >= nowSec - 0.02);
+  if (nextActive) {
+    return {
+      segment: nextActive,
+      nextPlayableStart: nextActive.start,
+      transitionProgress: 0,
+    };
+  }
+
+  const firstActive = segments.find((s) => !s.deleted);
+  return {
+    segment: firstActive || null,
+    nextPlayableStart: firstActive ? firstActive.start : Math.max(0, durationSec),
+    transitionProgress: 1,
+  };
+}
+

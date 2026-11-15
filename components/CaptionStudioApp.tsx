@@ -27,6 +27,12 @@ import {
   getDemoShowcaseCues,
   applyDynamicPositionPresetToCues,
   resolveCuePlacement,
+  VideoClipSegment,
+  VideoTextOverlay,
+  VideoTransitionType,
+  createDefaultVideoSegments,
+  splitVideoSegmentAtTime,
+  splitCaptionCueAtTime,
 } from '@/lib/subtitles';
 import CaptionCanvasPlayer from './CaptionCanvasPlayer';
 import FreeToolsHub, { ToolId } from './FreeToolsHub';
@@ -130,9 +136,25 @@ export default function CaptionStudioApp() {
   const [styleConfig, setStyleConfig] = useState<CaptionStyleConfig>(
     DEFAULT_STYLE_PRESETS['creator-obstacle-weave'].config
   );
-  const [videoEditConfig, setVideoEditConfig] = useState<VideoEditConfig>(
-    DEFAULT_VIDEO_EDIT_CONFIG
-  );
+  const [videoEditConfig, setVideoEditConfig] = useState<VideoEditConfig>(() => ({
+    ...DEFAULT_VIDEO_EDIT_CONFIG,
+    segments: createDefaultVideoSegments(DEMO_SHOWCASE_DURATION),
+    overlays: [
+      {
+        id: 'ov-1',
+        text: '100% REAL STUDIO ⚡',
+        start: 0.4,
+        end: 3.4,
+        xPosition: 50,
+        yPosition: 14,
+        bgColor: '#E11D48',
+        textColor: '#FFFFFF',
+        scale: 0.9,
+      },
+    ],
+  }));
+  const [selectedSegmentId, setSelectedSegmentId] = useState<string>('seg-1');
+  const [newStickerText, setNewStickerText] = useState<string>('WAIT FOR IT 🔥');
   const [dragScope, setDragScope] = useState<'all-cues' | 'current-cue'>('all-cues');
   const [activeStudioTab, setActiveStudioTab] = useState<'style' | 'video-edit' | 'export'>('style');
   const [styleCategoryFilter, setStyleCategoryFilter] = useState<'all' | 'creator-pro' | 'cinematic-depth' | 'kinetic-fx' | 'viral'>('all');
@@ -280,10 +302,23 @@ export default function CaptionStudioApp() {
     setMediaType(isVideo ? 'video' : 'audio');
     setMediaFileName(file.name);
     setAspectRatio(isVideo ? '9:16' : '1:1');
+    // Immediately clear demo cues and reset playhead so captions never play out-of-sync demo text over user video
+    setCues([]);
+    setCurrentTime(0);
+    setVideoEditConfig((prev) => ({
+      ...prev,
+      trimStart: 0,
+      trimEnd: 0,
+      segments: createDefaultVideoSegments(duration || 15),
+      overlays: [],
+    }));
 
     document
       .getElementById('studio-workspace')
       ?.scrollIntoView({ behavior: 'smooth' });
+
+    // Automatically extract audio & generate word-timed captions synced to the video's real voice
+    void handleAutoTranscribeMedia(file);
   };
 
   // Start / Stop real WebRTC Microphone or Camera recording
@@ -335,9 +370,10 @@ export default function CaptionStudioApp() {
     setRecordingMode(null);
   };
 
-  // Extract 12kHz mono WAV from any uploaded video/audio file (isolated from <video> playback) and call Groq Whisper + AI Spelling Proofreader
-  const handleAutoTranscribeMedia = async () => {
-    if (!mediaFile) {
+  // Extract 12kHz mono WAV from any uploaded video/audio file (isolated from <video> playback) and call Speech-to-Text + Proofreader
+  const handleAutoTranscribeMedia = async (fileOverride?: File) => {
+    const targetFile = fileOverride instanceof File ? fileOverride : mediaFile;
+    if (!targetFile) {
       setTranscribeError(
         'Please upload a video or audio file (or record your voice) first to auto-generate AI captions.'
       );
@@ -347,24 +383,24 @@ export default function CaptionStudioApp() {
     setIsTranscribing(true);
     setTranscribeError(null);
     setTranscribeStatus(
-      'Transcribing & proofreading captions with CapTanz AI Engine…'
+      'Syncing & proofreading real-time voice captions with CapTanz AI Engine…'
     );
 
     try {
       let uploadBlob: Blob;
-      let uploadName = mediaFile.name || 'audio.wav';
+      let uploadName = targetFile.name || 'audio.wav';
       let knownDuration = duration;
 
       if (
         extractedWavCacheRef.current &&
-        extractedWavCacheRef.current.file === mediaFile
+        extractedWavCacheRef.current.file === targetFile
       ) {
         uploadBlob = extractedWavCacheRef.current.blob;
         uploadName = 'extracted-audio.wav';
         knownDuration = extractedWavCacheRef.current.duration;
         if (knownDuration > 0) setDuration(knownDuration);
       } else {
-        const clonedFile = mediaFile.slice(0, mediaFile.size, mediaFile.type);
+        const clonedFile = targetFile.slice(0, targetFile.size, targetFile.type);
         const arrayBuf = await clonedFile.arrayBuffer();
 
         // Downsample to 12kHz mono WAV in browser so even large 4K/1080p videos become a compact ~1.4MB/min audio stream
@@ -386,16 +422,20 @@ export default function CaptionStudioApp() {
           if (Number.isFinite(decoded.duration) && decoded.duration > 0) {
             knownDuration = decoded.duration;
             setDuration(decoded.duration);
+            setVideoEditConfig((prev) => ({
+              ...prev,
+              segments: createDefaultVideoSegments(decoded.duration),
+            }));
           }
           extractedWavCacheRef.current = {
-            file: mediaFile,
+            file: targetFile,
             blob: uploadBlob,
             duration: knownDuration,
           };
           await audioCtx.close();
         } catch {
           uploadBlob = new Blob([arrayBuf], {
-            type: mediaFile.type || 'audio/wav',
+            type: targetFile.type || 'audio/wav',
           });
         }
       }
@@ -417,7 +457,7 @@ export default function CaptionStudioApp() {
         if (lastEnd > knownDuration) setDuration(lastEnd + 0.5);
       }
       setTranscribeStatus(
-        `Generated & proofread ${generatedCues.length} word-timed cues via CapTanz AI Engine.`
+        `Synced & proofread ${generatedCues.length} real-time voice-timed cues via CapTanz AI Engine.`
       );
     } catch (err: unknown) {
       setTranscribeError(
@@ -583,6 +623,82 @@ export default function CaptionStudioApp() {
       'reset-custom': 'Per-cue custom positions reset to global pointer slider.',
     };
     setTranscribeStatus(labelMap[preset]);
+  };
+
+  // Multi-Track Timeline Editor Actions (Split Video Clip, Split Caption Cue, Update Segment, Add Text Sticker)
+  const handleSplitVideoAtPlayhead = () => {
+    setVideoEditConfig((prev) => {
+      const nextSegments = splitVideoSegmentAtTime(
+        prev.segments || createDefaultVideoSegments(duration),
+        currentTime,
+        duration
+      );
+      const newlyCreated = nextSegments.find(
+        (s) => Math.abs(s.start - Number(currentTime.toFixed(2))) < 0.05
+      );
+      if (newlyCreated) setSelectedSegmentId(newlyCreated.id);
+      return {
+        ...prev,
+        segments: nextSegments,
+      };
+    });
+    setTranscribeStatus(
+      `Split video clip at ${currentTime.toFixed(2)}s — select any clip on Track V1 to cut, speed up, zoom, or add transition FX.`
+    );
+  };
+
+  const handleSplitCaptionAtPlayhead = () => {
+    setCues((prev) => splitCaptionCueAtTime(prev, currentTime));
+    setTranscribeStatus(
+      `Split subtitle cue at playhead (${currentTime.toFixed(2)}s).`
+    );
+  };
+
+  const handleUpdateVideoSegment = (
+    segId: string,
+    patch: Partial<VideoClipSegment>
+  ) => {
+    setVideoEditConfig((prev) => {
+      const base =
+        prev.segments && prev.segments.length > 0
+          ? prev.segments
+          : createDefaultVideoSegments(duration);
+      return {
+        ...prev,
+        segments: base.map((s) => (s.id === segId ? { ...s, ...patch } : s)),
+      };
+    });
+  };
+
+  const handleAddTextStickerOverlay = (customLabel?: string) => {
+    const label = (customLabel ?? newStickerText).trim() || 'WAIT FOR IT 🔥';
+    const start = Number(Math.max(0, currentTime).toFixed(2));
+    const end = Number(Math.min(Math.max(duration, start + 1), start + 2.5).toFixed(2));
+    const newOv: VideoTextOverlay = {
+      id: `ov-${Date.now()}`,
+      text: label,
+      start,
+      end,
+      xPosition: 50,
+      yPosition: 16,
+      bgColor: '#E11D48',
+      textColor: '#FFFFFF',
+      scale: 1,
+    };
+    setVideoEditConfig((prev) => ({
+      ...prev,
+      overlays: [...(prev.overlays || []), newOv],
+    }));
+    setTranscribeStatus(
+      `Added on-screen sticker "${label}" (${start}s – ${end}s) on Track FX1.`
+    );
+  };
+
+  const handleRemoveTextStickerOverlay = (ovId: string) => {
+    setVideoEditConfig((prev) => ({
+      ...prev,
+      overlays: (prev.overlays || []).filter((o) => o.id !== ovId),
+    }));
   };
 
   const handleDeleteCue = (idx: number) => {
@@ -1092,7 +1208,7 @@ export default function CaptionStudioApp() {
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
-                      onClick={handleAutoTranscribeMedia}
+                      onClick={() => handleAutoTranscribeMedia()}
                       disabled={isTranscribing || !mediaFile}
                       className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-xs font-bold transition-colors whitespace-nowrap shrink-0"
                     >
@@ -1897,6 +2013,77 @@ export default function CaptionStudioApp() {
                   </div>
                 ) : activeStudioTab === 'video-edit' ? (
                   <div className="space-y-3.5 max-h-[540px] overflow-y-auto pr-1">
+                    {/* 0. Real-Time Voice-to-Caption Sync Engine & Timeline Quick Split */}
+                    <div className="p-3 rounded-xl bg-emerald-950 text-white border border-emerald-700/70 space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <span className="inline-block px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[9px] font-black uppercase tracking-wider">
+                            REAL-TIME VOICE SYNC ENGINE
+                          </span>
+                          <p className="text-xs font-extrabold text-white">
+                            आवाज़ और कैप्शन रियल-टाइम सिंक (Voice Lock)
+                          </p>
+                        </div>
+                        <span className="text-[11px] font-mono font-bold text-emerald-300">
+                          {videoEditConfig.voiceSyncOffsetMs >= 0 ? '+' : ''}
+                          {videoEditConfig.voiceSyncOffsetMs}ms
+                        </span>
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-[10px] text-emerald-200/80">
+                          <span>← देर से (Lag -500ms)</span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setVideoEditConfig((v) => ({
+                                ...v,
+                                voiceSyncOffsetMs: 40,
+                              }))
+                            }
+                            className="underline text-emerald-300 font-bold"
+                          >
+                            Reset +40ms Lock
+                          </button>
+                          <span>पहले (Lead +500ms) →</span>
+                        </div>
+                        <input
+                          type="range"
+                          aria-label="Voice to caption real-time sync offset in milliseconds"
+                          min={-500}
+                          max={500}
+                          step={10}
+                          value={videoEditConfig.voiceSyncOffsetMs ?? 40}
+                          onChange={(e) =>
+                            setVideoEditConfig((v) => ({
+                              ...v,
+                              voiceSyncOffsetMs: parseInt(e.target.value, 10),
+                            }))
+                          }
+                          className="w-full accent-emerald-400 h-1.5 bg-emerald-900 rounded-lg cursor-ew-resize"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-1.5 pt-1">
+                        <button
+                          type="button"
+                          onClick={handleSplitVideoAtPlayhead}
+                          className="flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[11px] font-extrabold transition-colors"
+                        >
+                          <Scissors className="w-3 h-3" />
+                          <span>Split Video ({currentTime.toFixed(1)}s)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSplitCaptionAtPlayhead}
+                          className="flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-[11px] font-bold border border-slate-700 transition-colors"
+                        >
+                          <Scissors className="w-3 h-3 text-amber-400" />
+                          <span>Split Caption Cue</span>
+                        </button>
+                      </div>
+                    </div>
+
                     {/* 1. Creator Dynamic Caption Placement (शुरू में ऊपर · बाकी नीचे) */}
                     <div className="p-3 rounded-xl bg-slate-900 text-white border border-slate-800 space-y-2">
                       <div className="flex items-center justify-between">
@@ -2770,6 +2957,433 @@ export default function CaptionStudioApp() {
                   )}
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* FULL MULTI-TRACK TIMELINE VIDEO EDITOR DOCK (INSIDE WEBSITE) */}
+          <div
+            data-testid="multitrack-timeline-editor"
+            className="mt-6 rounded-2xl bg-slate-950 text-white border border-slate-800 shadow-2xl overflow-hidden"
+          >
+            {/* Top Timeline Action Toolbar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-slate-900 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <span className="px-2 py-0.5 rounded bg-blue-600 text-[10px] font-black uppercase tracking-wider">
+                  MULTI-TRACK STUDIO TIMELINE
+                </span>
+                <h3 className="text-xs sm:text-sm font-extrabold text-white">
+                  CapTanz Timeline Video &amp; Caption Editor (वेबसाइट के अंदर पूरा वीडियो एडिट करें)
+                </h3>
+                <span className="text-xs font-mono text-amber-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+                  Playhead: {formatSrtTime(currentTime)}
+                </span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSplitVideoAtPlayhead}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-colors"
+                >
+                  <Scissors className="w-3.5 h-3.5" />
+                  <span>✂️ Split Video at Playhead</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSplitCaptionAtPlayhead}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-extrabold transition-colors"
+                >
+                  <Scissors className="w-3.5 h-3.5" />
+                  <span>✂️ Split Caption at Playhead</span>
+                </button>
+
+                <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
+                  <input
+                    type="text"
+                    aria-label="New on-screen text sticker label"
+                    value={newStickerText}
+                    onChange={(e) => setNewStickerText(e.target.value)}
+                    placeholder="Sticker text…"
+                    className="w-32 px-2 py-0.5 text-xs bg-slate-900 text-white rounded border border-slate-800 focus:outline-none focus:border-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleAddTextStickerOverlay()}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-bold whitespace-nowrap"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Add Sticker</span>
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const segs = createDefaultVideoSegments(duration);
+                    setVideoEditConfig((v) => ({
+                      ...v,
+                      segments: segs,
+                    }));
+                    setSelectedSegmentId(segs[0].id);
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors"
+                >
+                  Reset Clips
+                </button>
+              </div>
+            </div>
+
+            {/* Interactive Time Ruler + Multi-Track Lanes */}
+            <div className="p-4 space-y-3">
+              {/* Time Scrubber Ruler */}
+              <div className="flex items-center gap-3">
+                <div className="w-28 shrink-0 text-[11px] font-mono font-bold text-slate-400">
+                  TIME RULER
+                </div>
+                <div
+                  onClick={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const ratio = Math.max(
+                      0,
+                      Math.min(1, (e.clientX - rect.left) / rect.width)
+                    );
+                    setCurrentTime(Number((ratio * Math.max(1, duration)).toFixed(2)));
+                  }}
+                  className="relative flex-1 h-6 bg-slate-900 rounded-lg border border-slate-800 cursor-pointer select-none overflow-hidden"
+                >
+                  {[0, 0.2, 0.4, 0.6, 0.8, 1].map((pct) => {
+                    const sec = Number((pct * Math.max(1, duration)).toFixed(1));
+                    return (
+                      <div
+                        key={pct}
+                        style={{ left: `${pct * 100}%` }}
+                        className="absolute top-0 bottom-0 flex items-center pl-1 border-l border-slate-700/70 text-[10px] font-mono text-slate-400 pointer-events-none"
+                      >
+                        {sec}s
+                      </div>
+                    );
+                  })}
+                  {/* Playhead Indicator */}
+                  <div
+                    style={{
+                      left: `${Math.min(100, Math.max(0, (currentTime / Math.max(1, duration)) * 100))}%`,
+                    }}
+                    className="absolute top-0 bottom-0 w-0.5 bg-rose-500 pointer-events-none"
+                  />
+                </div>
+              </div>
+
+              {/* TRACK 1: Captions & Voice Sync Track */}
+              <div className="flex items-center gap-3">
+                <div className="w-28 shrink-0">
+                  <p className="text-[11px] font-extrabold text-amber-400">
+                    T1 · CAPTIONS
+                  </p>
+                  <p className="text-[10px] text-slate-400">
+                    {cues.length} Voice Cues
+                  </p>
+                </div>
+                <div className="relative flex-1 h-11 bg-slate-900/90 rounded-xl border border-slate-800 overflow-hidden">
+                  {cues.map((cue, idx) => {
+                    const safeDur = Math.max(1, duration);
+                    const leftPct = Math.max(
+                      0,
+                      Math.min(98, (cue.start / safeDur) * 100)
+                    );
+                    const widthPct = Math.max(
+                      2.5,
+                      Math.min(100 - leftPct, ((cue.end - cue.start) / safeDur) * 100)
+                    );
+                    const isCueActive =
+                      currentTime >= cue.start && currentTime <= cue.end;
+                    const resolved = resolveCuePlacement(cue, idx, styleConfig);
+                    const zoneShort =
+                      resolved.yPosition <= 32
+                        ? 'TOP'
+                        : resolved.yPosition <= 62
+                          ? 'MID'
+                          : 'BOT';
+                    return (
+                      <button
+                        key={cue.id}
+                        type="button"
+                        onClick={() => setCurrentTime(Number((cue.start + 0.02).toFixed(2)))}
+                        style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+                        title={`#${idx + 1} (${cue.start.toFixed(2)}s - ${cue.end.toFixed(2)}s): ${cue.text}`}
+                        className={`absolute top-1 bottom-1 rounded-lg px-1.5 text-left overflow-hidden border transition-all flex items-center justify-between gap-1 ${
+                          isCueActive
+                            ? 'bg-amber-400 text-slate-950 border-white font-extrabold z-10'
+                            : 'bg-amber-500/20 text-amber-200 border-amber-500/40 hover:bg-amber-500/30 font-semibold'
+                        }`}
+                      >
+                        <span className="text-[10px] truncate">{cue.text}</span>
+                        <span className="text-[8px] font-mono px-1 rounded bg-slate-950/30 shrink-0">
+                          {zoneShort}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  <div
+                    style={{
+                      left: `${Math.min(100, Math.max(0, (currentTime / Math.max(1, duration)) * 100))}%`,
+                    }}
+                    className="absolute top-0 bottom-0 w-0.5 bg-rose-500 pointer-events-none z-20"
+                  />
+                </div>
+              </div>
+
+              {/* TRACK 2: Video Clips, Splits, Speed & Transitions Track */}
+              <div className="flex items-center gap-3">
+                <div className="w-28 shrink-0">
+                  <p className="text-[11px] font-extrabold text-sky-400">
+                    V1 · VIDEO CLIPS
+                  </p>
+                  <p className="text-[10px] text-slate-400">
+                    {(videoEditConfig.segments || []).length} Segments
+                  </p>
+                </div>
+                <div className="relative flex-1 h-12 bg-slate-900/90 rounded-xl border border-slate-800 overflow-hidden">
+                  {(videoEditConfig.segments && videoEditConfig.segments.length > 0
+                    ? videoEditConfig.segments
+                    : createDefaultVideoSegments(duration)
+                  ).map((seg) => {
+                    const safeDur = Math.max(1, duration);
+                    const leftPct = Math.max(
+                      0,
+                      Math.min(98, (seg.start / safeDur) * 100)
+                    );
+                    const widthPct = Math.max(
+                      3,
+                      Math.min(100 - leftPct, ((seg.end - seg.start) / safeDur) * 100)
+                    );
+                    const isSelected = selectedSegmentId === seg.id;
+                    return (
+                      <button
+                        key={seg.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedSegmentId(seg.id);
+                          setCurrentTime(Number((seg.start + 0.05).toFixed(2)));
+                        }}
+                        style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+                        className={`absolute top-1 bottom-1 rounded-lg px-2 text-left overflow-hidden border transition-all flex items-center justify-between gap-1.5 ${
+                          seg.deleted
+                            ? 'bg-rose-950/50 border-rose-700/60 text-rose-300/70 line-through'
+                            : isSelected
+                              ? 'bg-blue-600 text-white border-cyan-300 ring-2 ring-cyan-400/30 z-10'
+                              : 'bg-sky-500/20 text-sky-100 border-sky-500/40 hover:bg-sky-500/30'
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-extrabold truncate">
+                            {seg.label || 'Clip'} · {seg.start.toFixed(1)}s–{seg.end.toFixed(1)}s
+                          </p>
+                          <p className="text-[9px] font-mono opacity-85 truncate">
+                            {seg.deleted
+                              ? 'DELETED (SKIPPED)'
+                              : `${seg.speed}x · Zoom ${Math.round(seg.zoom * 100)}% · FX: ${seg.transition}`}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                  <div
+                    style={{
+                      left: `${Math.min(100, Math.max(0, (currentTime / Math.max(1, duration)) * 100))}%`,
+                    }}
+                    className="absolute top-0 bottom-0 w-0.5 bg-rose-500 pointer-events-none z-20"
+                  />
+                </div>
+              </div>
+
+              {/* TRACK 3: Text Stickers & Callout Overlays Track */}
+              <div className="flex items-center gap-3">
+                <div className="w-28 shrink-0">
+                  <p className="text-[11px] font-extrabold text-rose-400">
+                    FX1 · STICKERS
+                  </p>
+                  <p className="text-[10px] text-slate-400">
+                    {(videoEditConfig.overlays || []).length} Overlays
+                  </p>
+                </div>
+                <div className="relative flex-1 h-10 bg-slate-900/90 rounded-xl border border-slate-800 overflow-hidden">
+                  {(videoEditConfig.overlays || []).map((ov) => {
+                    const safeDur = Math.max(1, duration);
+                    const leftPct = Math.max(
+                      0,
+                      Math.min(96, (ov.start / safeDur) * 100)
+                    );
+                    const widthPct = Math.max(
+                      4,
+                      Math.min(100 - leftPct, ((ov.end - ov.start) / safeDur) * 100)
+                    );
+                    return (
+                      <div
+                        key={ov.id}
+                        style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+                        onClick={() => setCurrentTime(Number((ov.start + 0.05).toFixed(2)))}
+                        className="absolute top-1 bottom-1 rounded-lg px-2 bg-rose-600/30 border border-rose-500 text-rose-100 flex items-center justify-between gap-1 cursor-pointer overflow-hidden"
+                      >
+                        <span className="text-[10px] font-bold truncate">
+                          {ov.text}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveTextStickerOverlay(ov.id);
+                          }}
+                          className="text-rose-300 hover:text-white shrink-0"
+                          title="Remove sticker overlay"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                  <div
+                    style={{
+                      left: `${Math.min(100, Math.max(0, (currentTime / Math.max(1, duration)) * 100))}%`,
+                    }}
+                    className="absolute top-0 bottom-0 w-0.5 bg-rose-500 pointer-events-none z-20"
+                  />
+                </div>
+              </div>
+
+              {/* Selected Video Clip Segment Inspector Bar */}
+              {(() => {
+                const segs =
+                  videoEditConfig.segments && videoEditConfig.segments.length > 0
+                    ? videoEditConfig.segments
+                    : createDefaultVideoSegments(duration);
+                const activeSeg =
+                  segs.find((s) => s.id === selectedSegmentId) || segs[0];
+                if (!activeSeg) return null;
+                return (
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-800/90 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-mono font-bold">
+                        Editing {activeSeg.label || 'Clip'} ({activeSeg.start.toFixed(1)}s – {activeSeg.end.toFixed(1)}s)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleUpdateVideoSegment(activeSeg.id, {
+                            deleted: !activeSeg.deleted,
+                          })
+                        }
+                        className={`px-2.5 py-1 rounded-lg font-bold transition-colors ${
+                          activeSeg.deleted
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-rose-600/20 border border-rose-500/50 text-rose-300 hover:bg-rose-600 hover:text-white'
+                        }`}
+                      >
+                        {activeSeg.deleted
+                          ? '♻️ Restore Cut Segment'
+                          : '🗑️ Cut / Skip Segment'}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleUpdateVideoSegment(activeSeg.id, {
+                            muted: !activeSeg.muted,
+                          })
+                        }
+                        className={`px-2.5 py-1 rounded-lg font-bold border transition-colors ${
+                          activeSeg.muted
+                            ? 'bg-amber-500 text-slate-950 border-amber-400'
+                            : 'bg-slate-900 text-slate-300 border-slate-700 hover:text-white'
+                        }`}
+                      >
+                        {activeSeg.muted ? '🔇 Clip Muted' : '🔊 Clip Audio ON'}
+                      </button>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3">
+                      {/* Per-Segment Speed */}
+                      <div className="flex items-center gap-1">
+                        <span className="text-[11px] text-slate-400 font-semibold">
+                          Clip Speed:
+                        </span>
+                        {[0.5, 1, 1.25, 1.5, 2].map((sp) => (
+                          <button
+                            key={sp}
+                            type="button"
+                            onClick={() =>
+                              handleUpdateVideoSegment(activeSeg.id, { speed: sp })
+                            }
+                            className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold ${
+                              activeSeg.speed === sp
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                            }`}
+                          >
+                            {sp}x
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Per-Segment Zoom */}
+                      <div className="flex items-center gap-1">
+                        <span className="text-[11px] text-slate-400 font-semibold">
+                          Clip Zoom:
+                        </span>
+                        {[1, 1.15, 1.3, 1.5].map((zm) => (
+                          <button
+                            key={zm}
+                            type="button"
+                            onClick={() =>
+                              handleUpdateVideoSegment(activeSeg.id, { zoom: zm })
+                            }
+                            className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold ${
+                              Math.abs(activeSeg.zoom - zm) < 0.02
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                            }`}
+                          >
+                            {Math.round(zm * 100)}%
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Per-Segment Transition FX */}
+                      <div className="flex items-center gap-1">
+                        <span className="text-[11px] text-slate-400 font-semibold">
+                          Transition FX:
+                        </span>
+                        {(
+                          [
+                            { id: 'none', label: 'None' },
+                            { id: 'zoom-punch', label: 'Zoom Punch' },
+                            { id: 'flash', label: 'Flash' },
+                            { id: 'fade', label: 'Fade' },
+                            { id: 'whip-left', label: 'Whip' },
+                          ] as Array<{ id: VideoTransitionType; label: string }>
+                        ).map((tr) => (
+                          <button
+                            key={tr.id}
+                            type="button"
+                            onClick={() =>
+                              handleUpdateVideoSegment(activeSeg.id, {
+                                transition: tr.id,
+                              })
+                            }
+                            className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                              activeSeg.transition === tr.id
+                                ? 'bg-amber-400 text-slate-950'
+                                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                            }`}
+                          >
+                            {tr.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </section>
