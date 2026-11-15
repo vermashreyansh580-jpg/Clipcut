@@ -87,11 +87,11 @@ const FAQ_ITEMS = [
   },
   {
     q: 'Does it support Hinglish and Indian regional languages?',
-    a: 'Yes. Select "Hinglish (Hindi in Latin)" to transcribe or translate Hindi speech into Roman/Latin script popular on Instagram Reels and YouTube Shorts, or choose native Devanagari Hindi, Urdu, Punjabi, Tamil, Telugu, Marathi, Bengali, or Gujarati.',
+    a: 'Yes. Select "Hinglish (Hindi in Latin)" to transcribe or translate Hindi speech into Roman/Latin script popular on short-form vertical videos, or choose native Devanagari Hindi, Urdu, Punjabi, Tamil, Telugu, Marathi, Bengali, or Gujarati.',
   },
   {
     q: 'How does the browser video captioning and export work?',
-    a: 'When you upload or record a video or audio clip, Gemini AI transcribes your speech with timestamps. The studio then renders your video and animated word-by-word captions on an HTML5 60fps canvas and records the output directly in your browser with zero watermark.',
+    a: 'When you upload or record a video or audio clip, the CapTanz AI engine transcribes your speech with word-level timestamps. The studio then renders your video and animated word-by-word captions on an HTML5 60fps canvas and records the output directly in your browser with zero watermark.',
   },
   {
     q: 'Can I edit individual words, timestamps, or import my own SRT file?',
@@ -123,10 +123,10 @@ export default function CaptionStudioApp() {
 
   // Style configuration state
   const [styleConfig, setStyleConfig] = useState<CaptionStyleConfig>(
-    DEFAULT_STYLE_PRESETS['captik-obstacle-weave'].config
+    DEFAULT_STYLE_PRESETS['creator-obstacle-weave'].config
   );
   const [activeStudioTab, setActiveStudioTab] = useState<'transcript' | 'style' | 'export'>('transcript');
-  const [styleCategoryFilter, setStyleCategoryFilter] = useState<'all' | 'captik-india' | 'cinematic-depth' | 'after-effects' | 'viral'>('all');
+  const [styleCategoryFilter, setStyleCategoryFilter] = useState<'all' | 'creator-pro' | 'cinematic-depth' | 'kinetic-fx' | 'viral'>('all');
 
   // AI Transcription & Translation state (Groq Live Active Models)
   const [selectedLanguage, setSelectedLanguage] = useState<string>('hinglish');
@@ -206,7 +206,7 @@ export default function CaptionStudioApp() {
       setDuration(DEMO_SHOWCASE_DURATION);
       setCurrentTime(0.4);
       setTranscribeStatus(
-        `CapTanz Showcase Video loaded in ${langCode === 'auto' ? 'Hinglish' : langCode} — press Play Preview or test any Captik / 3D Obstacle Weave style!`
+        `CapTanz Showcase Video loaded in ${langCode === 'auto' ? 'Hinglish' : langCode} — press Play Preview or test any 3D Obstacle Weave & Kinetic style!`
       );
     }
   };
@@ -338,7 +338,7 @@ export default function CaptionStudioApp() {
     setIsTranscribing(true);
     setTranscribeError(null);
     setTranscribeStatus(
-      `Transcribing & proofreading captions with Groq ${selectedSttModel} + ${selectedLlmModel}…`
+      'Transcribing & proofreading captions with CapTanz AI Engine…'
     );
 
     try {
@@ -408,7 +408,7 @@ export default function CaptionStudioApp() {
         if (lastEnd > knownDuration) setDuration(lastEnd + 0.5);
       }
       setTranscribeStatus(
-        `Generated & proofread ${generatedCues.length} word-timed cues via Groq (${data.modelUsed || selectedSttModel}).`
+        `Generated & proofread ${generatedCues.length} word-timed cues via CapTanz AI Engine.`
       );
     } catch (err: unknown) {
       setTranscribeError(
@@ -429,7 +429,7 @@ export default function CaptionStudioApp() {
     setIsTranscribing(true);
     setTranscribeError(null);
     setTranscribeStatus(
-      `Translating ${cues.length} cues into ${selectedLanguage} via Groq (${selectedLlmModel})…`
+      `Translating ${cues.length} cues into ${selectedLanguage} via CapTanz AI Engine…`
     );
 
     try {
@@ -440,7 +440,7 @@ export default function CaptionStudioApp() {
       });
       setCues(data.cues || []);
       setTranscribeStatus(
-        `Translated ${cues.length} cues to ${selectedLanguage} via Groq (${data.modelUsed || selectedLlmModel}).`
+        `Translated ${cues.length} cues to ${selectedLanguage} via CapTanz AI Engine.`
       );
     } catch (err: unknown) {
       setTranscribeError(
@@ -615,7 +615,7 @@ export default function CaptionStudioApp() {
           <div className="max-w-6xl mx-auto space-y-10">
             <div className="text-center max-w-3xl mx-auto space-y-4">
               <p className="text-xs font-semibold text-blue-600 tracking-wide">
-                CapTanz 3D Studio · Captik.in & After Effects Styles · 3D Obstacle Weave · Zero Watermark
+                CapTanz 3D Studio · 30+ Kinetic & Viral Styles · 3D Obstacle Weave · Zero Watermark
               </p>
               <h1
                 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-slate-950 leading-[1.08]"
@@ -633,7 +633,7 @@ export default function CaptionStudioApp() {
                 Test our built-in multi-language showcase video right now or upload
                 your own clip — featuring{' '}
                 <strong className="font-semibold text-slate-900">
-                  Captik.in viral styles
+                  30+ viral creator styles
                 </strong>
                 ,{' '}
                 <strong className="font-semibold text-slate-900">
@@ -777,7 +777,7 @@ export default function CaptionStudioApp() {
                 CapTanz Interactive Browser Studio
               </p>
               <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-950">
-                CapTanz Studio — Captik Styles & 3D Obstacle Weave
+                CapTanz Studio — 30+ Kinetic Styles & 3D Obstacle Weave
               </h2>
             </div>
 
@@ -920,7 +920,7 @@ export default function CaptionStudioApp() {
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                       <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                      Groq AI Engine ({liveGroqModelsCount} Live Models)
+                      CapTanz AI Engine ({liveGroqModelsCount} Live Models)
                     </span>
                     <label
                       htmlFor="studio-quick-upload"
@@ -967,17 +967,17 @@ export default function CaptionStudioApp() {
                         htmlFor="studio-stt-model-select"
                         className="block text-[10px] font-semibold text-slate-500 mb-1"
                       >
-                        Groq Speech Model (Live)
+                        CapTanz Speech Engine (Live)
                       </label>
                       <select
                         id="studio-stt-model-select"
                         value={selectedSttModel}
                         onChange={(e) => setSelectedSttModel(e.target.value)}
-                        className="w-full px-2.5 py-1.5 text-[11px] font-mono font-semibold bg-slate-50 border border-slate-200 rounded-lg"
+                        className="w-full px-2.5 py-1.5 text-[11px] font-semibold bg-slate-50 border border-slate-200 rounded-lg"
                       >
                         {ACTIVE_GROQ_STT_MODELS.map((m) => (
                           <option key={m.id} value={m.id}>
-                            {m.id}
+                            {m.label}
                           </option>
                         ))}
                       </select>
@@ -988,17 +988,17 @@ export default function CaptionStudioApp() {
                         htmlFor="studio-llm-model-select"
                         className="block text-[10px] font-semibold text-slate-500 mb-1"
                       >
-                        Groq Translation LLM (Live)
+                        CapTanz Proofreader & Translator (Live)
                       </label>
                       <select
                         id="studio-llm-model-select"
                         value={selectedLlmModel}
                         onChange={(e) => setSelectedLlmModel(e.target.value)}
-                        className="w-full px-2.5 py-1.5 text-[11px] font-mono font-semibold bg-slate-50 border border-slate-200 rounded-lg"
+                        className="w-full px-2.5 py-1.5 text-[11px] font-semibold bg-slate-50 border border-slate-200 rounded-lg"
                       >
                         {ACTIVE_GROQ_LLM_MODELS.map((m) => (
                           <option key={m.id} value={m.id}>
-                            {m.id}
+                            {m.label}
                           </option>
                         ))}
                       </select>
@@ -1244,7 +1244,7 @@ export default function CaptionStudioApp() {
                         : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
-                    Captik & AE Styles (30)
+                    3D & Kinetic Styles (30)
                   </button>
                   <button
                     type="button"
@@ -1261,12 +1261,12 @@ export default function CaptionStudioApp() {
 
                 {activeStudioTab !== 'export' ? (
                   <div className="space-y-3.5">
-                    {/* Dedicated Viral YouTuber 3D Obstacle Weave (Kuch Piche, Kuch Aage) Card */}
+                    {/* Dedicated Creator 3D Obstacle Weave (Kuch Piche, Kuch Aage) Card */}
                     <div className="p-3 rounded-xl bg-slate-900 text-white border border-slate-800 space-y-2.5">
                       <div className="flex items-center justify-between gap-2">
                         <div>
                           <span className="inline-block px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 text-[10px] font-black uppercase tracking-wider mb-0.5">
-                            VIRAL YOUTUBER 3D WEAVE
+                            CREATOR 3D DEPTH WEAVE
                           </span>
                           <p className="text-xs font-extrabold text-white">
                             Obstacle Weave (Kuch Piche · Kuch Aage)
@@ -1327,7 +1327,7 @@ export default function CaptionStudioApp() {
                           className="w-full px-2.5 py-1.5 text-[11px] font-bold bg-slate-800 text-white border border-slate-700 rounded-lg"
                         >
                           <option value="weave-active-front">
-                            Viral YouTuber: Setup Words पीछे · Active Word आगे
+                            Creator Weave: Setup Words पीछे · Active Word आगे
                           </option>
                           <option value="alternate-words">
                             Zig-Zag Weave: Word 1 पीछे · Word 2 आगे · Word 3 पीछे
@@ -1402,7 +1402,7 @@ export default function CaptionStudioApp() {
                               Auto Obstacles / Building
                             </option>
                             <option value="center-portrait">
-                              YouTuber / Person in Center
+                              Creator / Person in Center
                             </option>
                             <option value="dark-silhouette">
                               Dark Pillar / Silhouette
@@ -1461,11 +1461,11 @@ export default function CaptionStudioApp() {
                       )}
                     </div>
 
-                    {/* Category Filter Pills for 30 Captik.in, After Effects & Viral Presets */}
+                    {/* Category Filter Pills for 30 Creator, 3D & Kinetic Presets */}
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                          Captik.in, 3D & After Effects Styles
+                          Creator, 3D Weave & Kinetic Styles
                         </p>
                         <span className="text-[11px] font-mono font-bold text-blue-600">
                           30 Styles
@@ -1474,9 +1474,9 @@ export default function CaptionStudioApp() {
                       <div className="grid grid-cols-5 gap-1 bg-slate-200/70 p-1 rounded-lg">
                         {[
                           { id: 'all', label: 'All (30)' },
-                          { id: 'captik-india', label: 'Captik (10)' },
+                          { id: 'creator-pro', label: 'Creator (10)' },
                           { id: 'cinematic-depth', label: '3D Weave' },
-                          { id: 'after-effects', label: 'AE FX (12)' },
+                          { id: 'kinetic-fx', label: 'Motion FX' },
                           { id: 'viral', label: 'Viral (6)' },
                         ].map((cat) => (
                           <button
@@ -1553,7 +1553,7 @@ export default function CaptionStudioApp() {
                                 }}
                                 className="px-2.5 py-1 rounded-md text-[11px] font-black tracking-tight shrink-0"
                               >
-                                {item.category === 'captik-india' ? 'CAPTIK' : 'AE FX'}
+                                {item.category === 'creator-pro' ? 'CREATOR' : 'PRO FX'}
                               </span>
                             </button>
                           );
@@ -1629,7 +1629,7 @@ export default function CaptionStudioApp() {
                         htmlFor="style-font-family"
                         className="block text-xs font-bold text-slate-700 mb-1"
                       >
-                        After Effects & Cinema Font Family (10 Fonts)
+                        Cinema & Display Font Family (10 Fonts)
                       </label>
                       <select
                         id="style-font-family"
@@ -1650,10 +1650,10 @@ export default function CaptionStudioApp() {
                           Anton (Heavy Block Impact / 3D Extrude)
                         </option>
                         <option value="Montserrat">
-                          Montserrat Black (Modern Viral / Saber)
+                          Montserrat Black (Modern Viral / Neon)
                         </option>
                         <option value="Cinzel">
-                          Cinzel Decorative (Hollywood Trailer Serif)
+                          Cinzel Decorative (Cinema Trailer Serif)
                         </option>
                         <option value="Orbitron">
                           Orbitron (Cyberpunk Sci-Fi HUD)
@@ -1681,7 +1681,7 @@ export default function CaptionStudioApp() {
                         htmlFor="style-animation-engine"
                         className="block text-xs font-bold text-slate-700 mb-1"
                       >
-                        Captik & After Effects Motion Engine
+                        CapTanz Kinetic Motion Engine
                       </label>
                       <select
                         id="style-animation-engine"
@@ -1699,28 +1699,28 @@ export default function CaptionStudioApp() {
                           Cinematic Tracking Pan (Obstacle Weave)
                         </option>
                         <option value="laser-strike">
-                          Captik Laser Glow Strike
+                          Neon Laser Glow Strike
                         </option>
                         <option value="sticker-tilt">
-                          Captik Sticker Cutout Tilt
+                          Paper Sticker Cutout Tilt
                         </option>
                         <option value="marker-swipe">
-                          Captik Marker Highlighter Swipe
+                          Marker Highlighter Swipe
                         </option>
-                        <option value="pop">Hormozi Elastic Pop</option>
+                        <option value="pop">Creator Elastic Pop</option>
                         <option value="whip-slide">
-                          AE Whip-Pan Upward Slide
+                          Kinetic Whip-Pan Upward Slide
                         </option>
-                        <option value="stomp">AE Bass Shake & Slam</option>
+                        <option value="stomp">Heavy Bass Shake & Slam</option>
                         <option value="glitch">
-                          AE RGB Chromatic Split Glitch
+                          RGB Chromatic Split Glitch
                         </option>
                         <option value="flicker">
-                          AE Saber Neon Electric Flicker
+                          Electric Neon Core Flicker
                         </option>
-                        <option value="wave">AE Sine Wave Float</option>
+                        <option value="wave">Sine Wave Float</option>
                         <option value="typewriter">
-                          AE Terminal Typewriter Reveal
+                          Terminal Typewriter Reveal
                         </option>
                         <option value="karaoke">Smooth Karaoke Fill</option>
                       </select>
@@ -1777,7 +1777,7 @@ export default function CaptionStudioApp() {
 
                       <div>
                         <div className="flex justify-between text-[11px] font-semibold text-slate-700 mb-1">
-                          <label htmlFor="style-glow">Saber Glow</label>
+                          <label htmlFor="style-glow">Neon Glow</label>
                           <span className="font-mono">
                             {styleConfig.glowBlur ?? 0}px
                           </span>
@@ -2070,8 +2070,7 @@ export default function CaptionStudioApp() {
                     Zero Manual Timeline Scrubbing
                   </p>
                   <p className="text-xs text-slate-300">
-                    Exports trimmed WAV audio or Premiere Pro / DaVinci Resolve
-                    .EDL cut list
+                    Exports trimmed WAV audio or timeline .EDL cut list
                   </p>
                 </div>
               </div>
@@ -2255,7 +2254,7 @@ export default function CaptionStudioApp() {
               CAP<span className="text-blue-500">TANZ</span> FREE STUDIO
             </p>
             <p className="text-xs text-slate-400">
-              Real-time browser auto-captioning, Captik & After Effects styles,
+              Real-time browser auto-captioning, 30+ kinetic creator styles,
               3D Obstacle Weave, silence remover, and format converters — 100%
               free with zero watermarks.
             </p>

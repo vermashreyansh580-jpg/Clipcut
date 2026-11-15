@@ -68,20 +68,20 @@ const oswald = Oswald({
 });
 
 export const metadata: Metadata = {
-  title: 'CapTanz — Free AI Auto-Captions, Captik Styles & 3D Obstacle Depth Studio (No Watermark)',
+  title: 'CapTanz — Free AI Auto-Captions, 3D Obstacle Weave & Kinetic Subtitle Studio (No Watermark)',
   description:
-    'CapTanz is a free online automatic video caption studio featuring Captik.in viral styles, After Effects kinetic typography, 3D obstacle weave (behind & in front of subjects), and watermark-free video/SRT exports.',
+    'CapTanz is a free online automatic video caption studio featuring 30+ kinetic typography styles, 3D obstacle weave (behind & in front of subjects), multi-language live preview, and watermark-free video/SRT exports.',
   openGraph: {
-    title: 'CapTanz — Free AI Auto-Captions, Captik Styles & 3D Obstacle Depth Studio (No Watermark)',
+    title: 'CapTanz — Free AI Auto-Captions, 3D Obstacle Weave & Kinetic Subtitle Studio (No Watermark)',
     description:
-      'CapTanz is a free online automatic video caption studio featuring Captik.in viral styles, After Effects kinetic typography, 3D obstacle weave (behind & in front of subjects), and watermark-free video/SRT exports.',
+      'CapTanz is a free online automatic video caption studio featuring 30+ kinetic typography styles, 3D obstacle weave (behind & in front of subjects), multi-language live preview, and watermark-free video/SRT exports.',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'CapTanz — Free AI Auto-Captions, Captik Styles & 3D Obstacle Depth Studio (No Watermark)',
+    title: 'CapTanz — Free AI Auto-Captions, 3D Obstacle Weave & Kinetic Subtitle Studio (No Watermark)',
     description:
-      'CapTanz is a free online automatic video caption generator, Captik.in viral styles, After Effects kinetic typography, and watermark-free exports.',
+      'CapTanz is a free online automatic video caption generator, 3D obstacle weave studio, kinetic typography editor, and watermark-free exporter.',
   },
 };
 

@@ -15,31 +15,31 @@ export interface CaptionCue {
 }
 
 export type CaptionStylePreset =
-  | 'captik-obstacle-weave'
-  | 'captik-laser-beam'
-  | 'captik-desi-hook'
-  | 'captik-sticker-scrap'
-  | 'captik-netflix-cinema'
-  | 'captik-bauhaus-block'
-  | 'captik-iman-glass'
-  | 'captik-dhruv-docu'
-  | 'captik-marker-swipe'
-  | 'captik-mrbeast-slam'
-  | 'ae-behind-building'
-  | 'ae-skyline-rise'
-  | 'ae-neon-saber'
-  | 'ae-3d-extrude'
-  | 'ae-rgb-glitch'
-  | 'ae-whip-slide'
-  | 'ae-bass-stomp'
-  | 'ae-gold-luxury'
-  | 'ae-fire-inferno'
-  | 'ae-hollow-outline'
-  | 'ae-typewriter-hud'
-  | 'ae-sine-wave'
-  | 'ae-glass-capsule'
-  | 'ae-anamorphic-film'
-  | 'hormozi-pop'
+  | 'creator-obstacle-weave'
+  | 'creator-laser-beam'
+  | 'creator-desi-hook'
+  | 'creator-sticker-scrap'
+  | 'creator-cinema-bar'
+  | 'creator-color-block'
+  | 'creator-luxury-glass'
+  | 'creator-docu-bar'
+  | 'creator-marker-swipe'
+  | 'creator-impact-slam'
+  | 'kinetic-behind-building'
+  | 'kinetic-skyline-rise'
+  | 'kinetic-neon-core'
+  | 'kinetic-3d-extrude'
+  | 'kinetic-rgb-glitch'
+  | 'kinetic-whip-slide'
+  | 'kinetic-bass-stomp'
+  | 'kinetic-gold-luxury'
+  | 'kinetic-fire-inferno'
+  | 'kinetic-hollow-outline'
+  | 'kinetic-typewriter-hud'
+  | 'kinetic-sine-wave'
+  | 'kinetic-glass-capsule'
+  | 'kinetic-anamorphic-film'
+  | 'creator-pop'
   | 'word-highlight'
   | 'boxed-pill'
   | 'karaoke-glow'
@@ -106,7 +106,7 @@ export interface CaptionStyleConfig {
   uppercase: boolean;
   maxWordsPerLine: number;
   animationIntensity: 'subtle' | 'medium' | 'dynamic';
-  // After Effects & Captik Motion & Visual FX
+  // CapTanz Kinetic Motion & Visual FX
   animationStyle?: CaptionAnimationStyle;
   glowColor?: string;
   glowBlur?: number; // 0 to 40
@@ -140,18 +140,18 @@ export const DEFAULT_STYLE_PRESETS: Record<
   {
     name: string;
     tagline: string;
-    category: 'captik-india' | 'cinematic-depth' | 'after-effects' | 'viral';
+    category: 'creator-pro' | 'cinematic-depth' | 'kinetic-fx' | 'viral';
     badge: string;
     config: CaptionStyleConfig;
   }
 > = {
-  'captik-obstacle-weave': {
-    name: 'Captik 3D Obstacle Weave (Kuch Piche · Kuch Aage)',
+  'creator-obstacle-weave': {
+    name: '3D Obstacle Weave (Kuch Piche · Kuch Aage)',
     tagline: 'Setup words pass BEHIND buildings/person while active punchwords pop IN FRONT',
-    category: 'captik-india',
+    category: 'creator-pro',
     badge: '3D WEAVE',
     config: {
-      preset: 'captik-obstacle-weave',
+      preset: 'creator-obstacle-weave',
       fontFamily: 'Bebas Neue',
       fontSize: 84,
       xPosition: 50,
@@ -180,13 +180,13 @@ export const DEFAULT_STYLE_PRESETS: Record<
       crossSpeed: 55,
     },
   },
-  'captik-laser-beam': {
-    name: 'Captik Laser Glow Strike',
-    tagline: 'Captik.in signature neon laser beam bar & electric word pulse',
-    category: 'captik-india',
-    badge: 'CAPTIK LASER',
+  'creator-laser-beam': {
+    name: 'Neon Laser Glow Strike',
+    tagline: 'Glowing neon laser beam bar & electric word pulse beneath spoken words',
+    category: 'creator-pro',
+    badge: 'LASER FX',
     config: {
-      preset: 'captik-laser-beam',
+      preset: 'creator-laser-beam',
       fontFamily: 'Montserrat',
       fontSize: 54,
       xPosition: 50,
@@ -208,13 +208,13 @@ export const DEFAULT_STYLE_PRESETS: Record<
       crossDirection: 'none',
     },
   },
-  'captik-desi-hook': {
-    name: 'Captik Desi Viral Hook (2-Tone)',
-    tagline: 'Crisp white setup + tilted bright yellow-green punchword for Indian Reels',
-    category: 'captik-india',
+  'creator-desi-hook': {
+    name: 'Desi Viral Hook (2-Tone)',
+    tagline: 'Crisp white setup + tilted bright lime punchword for Hinglish & Hindi clips',
+    category: 'creator-pro',
     badge: 'DESI HOOK',
     config: {
-      preset: 'captik-desi-hook',
+      preset: 'creator-desi-hook',
       fontFamily: 'Anton',
       fontSize: 62,
       xPosition: 50,
@@ -236,13 +236,13 @@ export const DEFAULT_STYLE_PRESETS: Record<
       crossDirection: 'none',
     },
   },
-  'captik-sticker-scrap': {
-    name: 'Captik Sticker Scrapbook',
+  'creator-sticker-scrap': {
+    name: 'Paper Sticker Cutout',
     tagline: 'Rotated paper-cutout sticker pill with bold white & black double border',
-    category: 'captik-india',
+    category: 'creator-pro',
     badge: 'STICKER',
     config: {
-      preset: 'captik-sticker-scrap',
+      preset: 'creator-sticker-scrap',
       fontFamily: 'Plus Jakarta Sans',
       fontSize: 50,
       xPosition: 50,
@@ -264,13 +264,13 @@ export const DEFAULT_STYLE_PRESETS: Record<
       crossDirection: 'none',
     },
   },
-  'captik-netflix-cinema': {
-    name: 'Captik Netflix Cinema Bar',
+  'creator-cinema-bar': {
+    name: 'Classic Cinema Matte Bar',
     tagline: 'Classic cinema warm-yellow subtitle with subtle dark matte bar',
-    category: 'captik-india',
-    badge: 'NETFLIX',
+    category: 'creator-pro',
+    badge: 'CINEMA',
     config: {
-      preset: 'captik-netflix-cinema',
+      preset: 'creator-cinema-bar',
       fontFamily: 'Oswald',
       fontSize: 46,
       xPosition: 50,
@@ -290,13 +290,13 @@ export const DEFAULT_STYLE_PRESETS: Record<
       crossDirection: 'none',
     },
   },
-  'captik-bauhaus-block': {
-    name: 'Captik Bauhaus Color Block',
-    tagline: 'Geometric brutalist color-blocked tiles inspired by Captik Bauhaus',
-    category: 'captik-india',
-    badge: 'BAUHAUS',
+  'creator-color-block': {
+    name: 'Brutalist Color Block',
+    tagline: 'Geometric brutalist color-blocked tiles with bold offset shadow',
+    category: 'creator-pro',
+    badge: 'COLOR BLOCK',
     config: {
-      preset: 'captik-bauhaus-block',
+      preset: 'creator-color-block',
       fontFamily: 'Montserrat',
       fontSize: 52,
       xPosition: 50,
@@ -318,13 +318,13 @@ export const DEFAULT_STYLE_PRESETS: Record<
       crossDirection: 'none',
     },
   },
-  'captik-iman-glass': {
-    name: 'YouTuber Luxury Depth (Iman Style)',
+  'creator-luxury-glass': {
+    name: 'Luxury Editorial Depth',
     tagline: 'Editorial serif where setup words sit behind obstacle & key word glows in front',
-    category: 'captik-india',
-    badge: 'YOUTUBER 3D',
+    category: 'creator-pro',
+    badge: 'LUXURY 3D',
     config: {
-      preset: 'captik-iman-glass',
+      preset: 'creator-luxury-glass',
       fontFamily: 'Fraunces',
       fontSize: 64,
       xPosition: 50,
@@ -351,13 +351,13 @@ export const DEFAULT_STYLE_PRESETS: Record<
       crossSpeed: 45,
     },
   },
-  'captik-dhruv-docu': {
-    name: 'YouTuber Documentary Fact Bar',
+  'creator-docu-bar': {
+    name: 'Documentary Fact Bar',
     tagline: 'High-retention yellow documentary highlight bar for explainers & facts',
-    category: 'captik-india',
+    category: 'creator-pro',
     badge: 'DOCU FACT',
     config: {
-      preset: 'captik-dhruv-docu',
+      preset: 'creator-docu-bar',
       fontFamily: 'Plus Jakarta Sans',
       fontSize: 48,
       xPosition: 50,
@@ -377,13 +377,13 @@ export const DEFAULT_STYLE_PRESETS: Record<
       crossDirection: 'none',
     },
   },
-  'captik-marker-swipe': {
-    name: 'Captik Marker Highlighter Swipe',
+  'creator-marker-swipe': {
+    name: 'Marker Highlighter Swipe',
     tagline: 'Smooth pastel marker brush sweeps across each word as it is spoken',
-    category: 'captik-india',
+    category: 'creator-pro',
     badge: 'MARKER',
     config: {
-      preset: 'captik-marker-swipe',
+      preset: 'creator-marker-swipe',
       fontFamily: 'Plus Jakarta Sans',
       fontSize: 50,
       xPosition: 50,
@@ -403,13 +403,13 @@ export const DEFAULT_STYLE_PRESETS: Record<
       crossDirection: 'none',
     },
   },
-  'captik-mrbeast-slam': {
-    name: 'YouTuber Beast Impact Slam',
-    tagline: 'Heavy 10px black outline with explosive word slam & cyan-yellow pop',
-    category: 'captik-india',
-    badge: 'BEAST SLAM',
+  'creator-impact-slam': {
+    name: 'Thunder Impact Slam',
+    tagline: 'Heavy 10px black outline with explosive word slam & golden-orange pop',
+    category: 'creator-pro',
+    badge: 'IMPACT SLAM',
     config: {
-      preset: 'captik-mrbeast-slam',
+      preset: 'creator-impact-slam',
       fontFamily: 'Anton',
       fontSize: 64,
       xPosition: 50,
@@ -432,13 +432,13 @@ export const DEFAULT_STYLE_PRESETS: Record<
       crossDirection: 'none',
     },
   },
-  'ae-behind-building': {
-    name: 'AE Behind Building (Obstacle Weave)',
+  'kinetic-behind-building': {
+    name: 'Skyline Behind Building (Obstacle Weave)',
     tagline: 'Words weave behind & in front of buildings, pillars, and subjects',
     category: 'cinematic-depth',
     badge: 'BEHIND FX',
     config: {
-      preset: 'ae-behind-building',
+      preset: 'kinetic-behind-building',
       fontFamily: 'Bebas Neue',
       fontSize: 82,
       xPosition: 50,
@@ -467,13 +467,13 @@ export const DEFAULT_STYLE_PRESETS: Record<
       crossSpeed: 55,
     },
   },
-  'ae-skyline-rise': {
-    name: 'AE Horizon Split (Top Piche · Bottom Aage)',
+  'kinetic-skyline-rise': {
+    name: 'Horizon Split (Top Piche · Bottom Aage)',
     tagline: 'Top setup line rises behind skyline while bottom punchline pops in front',
     category: 'cinematic-depth',
     badge: 'DEPTH SPLIT',
     config: {
-      preset: 'ae-skyline-rise',
+      preset: 'kinetic-skyline-rise',
       fontFamily: 'Anton',
       fontSize: 76,
       xPosition: 50,
@@ -503,13 +503,13 @@ export const DEFAULT_STYLE_PRESETS: Record<
       crossSpeed: 50,
     },
   },
-  'ae-neon-saber': {
-    name: 'AE Saber Neon Glow',
-    tagline: 'After Effects Saber electric neon core with multi-pass bloom',
-    category: 'after-effects',
-    badge: 'SABER GLOW',
+  'kinetic-neon-core': {
+    name: 'Electric Neon Core Glow',
+    tagline: 'High-voltage electric neon core with multi-pass bloom',
+    category: 'kinetic-fx',
+    badge: 'NEON GLOW',
     config: {
-      preset: 'ae-neon-saber',
+      preset: 'kinetic-neon-core',
       fontFamily: 'Orbitron',
       fontSize: 50,
       xPosition: 50,
@@ -531,13 +531,13 @@ export const DEFAULT_STYLE_PRESETS: Record<
       crossDirection: 'none',
     },
   },
-  'ae-3d-extrude': {
-    name: 'AE 3D Isometric Extrude',
+  'kinetic-3d-extrude': {
+    name: '3D Isometric Block Extrude',
     tagline: 'Deep 3D stacked block extrusion with heavy perspective pop',
-    category: 'after-effects',
+    category: 'kinetic-fx',
     badge: '3D EXTRUDE',
     config: {
-      preset: 'ae-3d-extrude',
+      preset: 'kinetic-3d-extrude',
       fontFamily: 'Anton',
       fontSize: 60,
       xPosition: 50,
@@ -559,13 +559,13 @@ export const DEFAULT_STYLE_PRESETS: Record<
       crossDirection: 'none',
     },
   },
-  'ae-rgb-glitch': {
-    name: 'AE RGB Split Cyberpunk Glitch',
+  'kinetic-rgb-glitch': {
+    name: 'RGB Split Cyber Glitch',
     tagline: 'Red/Cyan chromatic aberration split + frame slice jitter',
-    category: 'after-effects',
+    category: 'kinetic-fx',
     badge: 'RGB GLITCH',
     config: {
-      preset: 'ae-rgb-glitch',
+      preset: 'kinetic-rgb-glitch',
       fontFamily: 'Montserrat',
       fontSize: 54,
       xPosition: 50,
@@ -587,13 +587,13 @@ export const DEFAULT_STYLE_PRESETS: Record<
       crossDirection: 'none',
     },
   },
-  'ae-whip-slide': {
-    name: 'AE Kinetic Whip Slide',
+  'kinetic-whip-slide': {
+    name: 'Kinetic Whip Slide',
     tagline: 'Words whip-pan upward from baseline with spring overshoot',
-    category: 'after-effects',
+    category: 'kinetic-fx',
     badge: 'WHIP PAN',
     config: {
-      preset: 'ae-whip-slide',
+      preset: 'kinetic-whip-slide',
       fontFamily: 'Oswald',
       fontSize: 58,
       xPosition: 50,
@@ -615,13 +615,13 @@ export const DEFAULT_STYLE_PRESETS: Record<
       crossDirection: 'none',
     },
   },
-  'ae-bass-stomp': {
-    name: 'AE Bass Stomp Slam',
+  'kinetic-bass-stomp': {
+    name: 'Heavy Bass Stomp Slam',
     tagline: '1.6x to 1.0x heavy impact slam on every spoken word',
-    category: 'after-effects',
+    category: 'kinetic-fx',
     badge: 'BASS SLAM',
     config: {
-      preset: 'ae-bass-stomp',
+      preset: 'kinetic-bass-stomp',
       fontFamily: 'Anton',
       fontSize: 62,
       xPosition: 50,
@@ -643,13 +643,13 @@ export const DEFAULT_STYLE_PRESETS: Record<
       crossDirection: 'none',
     },
   },
-  'ae-gold-luxury': {
-    name: 'AE 24K Metallic Gold',
+  'kinetic-gold-luxury': {
+    name: '24K Metallic Gold',
     tagline: 'Multi-stop luxury gold gradient fill with 3D bevel shadow',
-    category: 'after-effects',
+    category: 'kinetic-fx',
     badge: '24K GOLD',
     config: {
-      preset: 'ae-gold-luxury',
+      preset: 'kinetic-gold-luxury',
       fontFamily: 'Cinzel',
       fontSize: 52,
       xPosition: 50,
@@ -674,13 +674,13 @@ export const DEFAULT_STYLE_PRESETS: Record<
       crossDirection: 'none',
     },
   },
-  'ae-fire-inferno': {
-    name: 'AE Inferno Heat Wave',
+  'kinetic-fire-inferno': {
+    name: 'Inferno Heat Wave',
     tagline: 'Blazing yellow-to-crimson vertical gradient with upward float',
-    category: 'after-effects',
+    category: 'kinetic-fx',
     badge: 'INFERNO',
     config: {
-      preset: 'ae-fire-inferno',
+      preset: 'kinetic-fire-inferno',
       fontFamily: 'Bebas Neue',
       fontSize: 66,
       xPosition: 50,
@@ -705,13 +705,13 @@ export const DEFAULT_STYLE_PRESETS: Record<
       crossDirection: 'none',
     },
   },
-  'ae-hollow-outline': {
-    name: 'AE Hollow Neon Stroke',
+  'kinetic-hollow-outline': {
+    name: 'Hollow Neon Stroke',
     tagline: 'Inactive words are transparent neon outlines; active word fills solid',
-    category: 'after-effects',
+    category: 'kinetic-fx',
     badge: 'HOLLOW FX',
     config: {
-      preset: 'ae-hollow-outline',
+      preset: 'kinetic-hollow-outline',
       fontFamily: 'Montserrat',
       fontSize: 56,
       xPosition: 50,
@@ -734,13 +734,13 @@ export const DEFAULT_STYLE_PRESETS: Record<
       crossDirection: 'none',
     },
   },
-  'ae-typewriter-hud': {
-    name: 'AE Sci-Fi Typewriter HUD',
+  'kinetic-typewriter-hud': {
+    name: 'Sci-Fi Typewriter HUD',
     tagline: 'Character-by-character terminal reveal with live cursor block',
-    category: 'after-effects',
+    category: 'kinetic-fx',
     badge: 'HUD TYPE',
     config: {
-      preset: 'ae-typewriter-hud',
+      preset: 'kinetic-typewriter-hud',
       fontFamily: 'JetBrains Mono',
       fontSize: 44,
       xPosition: 50,
@@ -762,13 +762,13 @@ export const DEFAULT_STYLE_PRESETS: Record<
       crossDirection: 'none',
     },
   },
-  'ae-sine-wave': {
-    name: 'AE Floating Wave Kinetic',
+  'kinetic-sine-wave': {
+    name: 'Floating Wave Kinetic',
     tagline: 'Continuous smooth sinusoidal wave motion across spoken words',
-    category: 'after-effects',
+    category: 'kinetic-fx',
     badge: 'WAVE FX',
     config: {
-      preset: 'ae-sine-wave',
+      preset: 'kinetic-sine-wave',
       fontFamily: 'Plus Jakarta Sans',
       fontSize: 52,
       xPosition: 50,
@@ -791,13 +791,13 @@ export const DEFAULT_STYLE_PRESETS: Record<
       crossDirection: 'none',
     },
   },
-  'ae-glass-capsule': {
-    name: 'AE Frosted Glass Capsule',
+  'kinetic-glass-capsule': {
+    name: 'Frosted Glass Capsule',
     tagline: 'Modern translucent glass HUD bar with neon active word pill',
-    category: 'after-effects',
+    category: 'kinetic-fx',
     badge: 'GLASS HUD',
     config: {
-      preset: 'ae-glass-capsule',
+      preset: 'kinetic-glass-capsule',
       fontFamily: 'Plus Jakarta Sans',
       fontSize: 46,
       xPosition: 50,
@@ -819,13 +819,13 @@ export const DEFAULT_STYLE_PRESETS: Record<
       crossDirection: 'none',
     },
   },
-  'ae-anamorphic-film': {
-    name: 'AE Anamorphic Cinema Title',
-    tagline: 'Wide letter-spaced Hollywood trailer typography with slow drift',
-    category: 'after-effects',
+  'kinetic-anamorphic-film': {
+    name: 'Anamorphic Cinema Title',
+    tagline: 'Wide letter-spaced cinema trailer typography with slow drift',
+    category: 'kinetic-fx',
     badge: 'TRAILER',
     config: {
-      preset: 'ae-anamorphic-film',
+      preset: 'kinetic-anamorphic-film',
       fontFamily: 'Cinzel',
       fontSize: 48,
       xPosition: 50,
@@ -848,13 +848,13 @@ export const DEFAULT_STYLE_PRESETS: Record<
       depthBehindSubject: false,
     },
   },
-  'hormozi-pop': {
-    name: 'Creator Pop (Hormozi)',
+  'creator-pop': {
+    name: 'Creator Impact Pop',
     tagline: 'Bold active word pop with high-contrast stroke',
     category: 'viral',
-    badge: 'VIRAL',
+    badge: 'CREATOR POP',
     config: {
-      preset: 'hormozi-pop',
+      preset: 'creator-pop',
       fontFamily: 'Plus Jakarta Sans',
       fontSize: 52,
       xPosition: 50,
@@ -941,7 +941,7 @@ export const DEFAULT_STYLE_PRESETS: Record<
     },
   },
   'bounce-bold': {
-    name: 'Reels Bounce',
+    name: 'Dynamic Bounce',
     tagline: 'Spring-scaled active words for short-form clips',
     category: 'viral',
     badge: 'BOUNCE',
@@ -995,19 +995,19 @@ const DEMO_LANGUAGE_LINES: Record<string, [string, string, string, string]> = {
     'CapTanz studio mein aapka swagat hai',
     'Kuch text obstacles ke piche se nikalta hai',
     'Aur main punchword seedha aage pop karta hai',
-    'Apni pasand ki language aur Captik style chunein',
+    'Apni pasand ki language aur caption style chunein',
   ],
   Hindi: [
     'CapTanz स्टूडियो में आपका स्वागत है',
     'कुछ टेक्स्ट बिल्डिंग और ऑब्स्टेकल्स के पीछे चलता है',
     'और मुख्य शब्द सीधा आपके सामने पॉप करता है',
-    'अपनी मनपसंद भाषा और Captik स्टाइल तुरंत चेक करें',
+    'अपनी मनपसंद भाषा और कैप्शन स्टाइल तुरंत चेक करें',
   ],
   English: [
     'Welcome to CapTanz 3D Caption Studio',
     'Watch words glide behind foreground obstacles',
     'While hero punchwords pop right in front',
-    'Pick any language and test Captik styles live',
+    'Pick any language and test 30+ styles live',
   ],
   Punjabi: [
     'CapTanz ਸਟੂਡੀਓ ਵਿੱਚ ਤੁਹਾਡਾ ਸੁਆਗਤ ਹੈ',
@@ -1019,7 +1019,7 @@ const DEMO_LANGUAGE_LINES: Record<string, [string, string, string, string]> = {
     'CapTanz स्टुडिओमध्ये तुमचे स्वागत आहे',
     'काही शब्द इमारतींच्या मागून जातात',
     'आणि महत्त्वाचे शब्द थेट समोर पॉप होतात',
-    'तुमची आवडती भाषा आणि Captik स्टाईल निवडा',
+    'तुमची आवडती भाषा आणि कॅप्शन स्टाईल निवडा',
   ],
   Tamil: [
     'CapTanz ஸ்டுடியோவிற்கு நல்வரவு',

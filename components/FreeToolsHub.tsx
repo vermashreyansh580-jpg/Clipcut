@@ -99,7 +99,7 @@ const TOOLS_CATALOG: ToolCardItem[] = [
     title: 'Universal Subtitle Converter',
     tag: '6 Formats',
     description:
-      'Convert any subtitle file between SRT, WebVTT, ASS (Advanced SubStation Alpha), YouTube SBV, plain TXT transcript, and developer JSON.',
+      'Convert any subtitle file between SRT, WebVTT, ASS (Advanced SubStation Alpha), SubViewer (.SBV), plain TXT transcript, and developer JSON.',
   },
   {
     id: 'filler-remover',
@@ -128,7 +128,7 @@ const TOOLS_CATALOG: ToolCardItem[] = [
     title: 'Free Silence Remover',
     tag: 'Web Audio Engine',
     description:
-      'Drop any audio or video file to detect silent gaps using real-time RMS audio analysis. Download a silence-free WAV or Premiere Pro EDL cut list.',
+      'Drop any audio or video file to detect silent gaps using real-time RMS audio analysis. Download a silence-free WAV or timeline EDL cut list.',
   },
 ];
 
@@ -373,7 +373,7 @@ export default function FreeToolsHub({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${(silenceFileName || 'timeline').replace(/\.[^.]+$/, '')}-premiere-cuts.edl`;
+    a.download = `${(silenceFileName || 'timeline').replace(/\.[^.]+$/, '')}-timeline-cuts.edl`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -757,7 +757,7 @@ export default function FreeToolsHub({
                       className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs transition-colors whitespace-nowrap shrink-0"
                     >
                       <Scissors className="w-4 h-4 text-emerald-400" />
-                      <span>Export Premiere Pro / Resolve Cut List (.EDL)</span>
+                      <span>Export Timeline Cut List (.EDL)</span>
                     </button>
                   </div>
                 </>
@@ -999,7 +999,7 @@ export default function FreeToolsHub({
                         { id: 'srt', label: 'SRT (SubRip)' },
                         { id: 'vtt', label: 'WebVTT (.vtt)' },
                         { id: 'ass', label: 'ASS / SSA Styled' },
-                        { id: 'sbv', label: 'YouTube (.sbv)' },
+                        { id: 'sbv', label: 'SubViewer (.sbv)' },
                         { id: 'txt', label: 'Plain Text (.txt)' },
                         { id: 'json', label: 'Developer JSON' },
                       ] as const

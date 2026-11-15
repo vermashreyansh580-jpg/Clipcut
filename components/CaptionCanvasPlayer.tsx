@@ -635,7 +635,7 @@ export default function CaptionCanvasPlayer({
           14
         );
         ctx.fill();
-        if (style.preset === 'ae-glass-capsule') {
+        if (style.preset === 'kinetic-glass-capsule') {
           ctx.strokeStyle = 'rgba(148, 163, 184, 0.38)';
           ctx.lineWidth = 1.5;
           ctx.stroke();
@@ -836,7 +836,7 @@ export default function CaptionCanvasPlayer({
             }
 
             // After Effects RGB Chromatic Aberration Split on Glitch mode
-            if (animStyle === 'glitch' && (mw.isActive || style.preset === 'ae-rgb-glitch')) {
+            if (animStyle === 'glitch' && (mw.isActive || style.preset === 'kinetic-rgb-glitch')) {
               const shift = (mw.isActive ? 5 : 2.5) * scaleFactor;
               ctx.save();
               ctx.globalAlpha = 0.78;
@@ -1347,7 +1347,7 @@ export default function CaptionCanvasPlayer({
                 ? 'bg-sky-500/20 border-sky-400 text-sky-300'
                 : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
             }`}
-            title="Weave captions behind & in front of obstacles (buildings/person) like viral YouTubers"
+            title="Weave captions behind & in front of obstacles (buildings/person) in 3D depth"
           >
             <Layers className="w-3.5 h-3.5" />
             <span>

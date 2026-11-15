@@ -11,30 +11,30 @@ export const GROQ_API_BASE = 'https://api.groq.com/openai/v1';
 export const ACTIVE_GROQ_STT_MODELS = [
   {
     id: 'whisper-large-v3',
-    label: 'whisper-large-v3 (Groq High-Precision Full Whisper)',
+    label: 'Pro Speech Engine v3 (High-Precision Word Timing)',
   },
   {
     id: 'whisper-large-v3-turbo',
-    label: 'whisper-large-v3-turbo (Groq Fast Word-Level STT)',
+    label: 'Turbo Speech Engine v3 (Fast Word-Level STT)',
   },
 ] as const;
 
 export const ACTIVE_GROQ_LLM_MODELS = [
   {
     id: 'openai/gpt-oss-120b',
-    label: 'openai/gpt-oss-120b (Groq Flagship Proofreader & Translator)',
+    label: 'Flagship Proofreader & Translator (120B)',
   },
   {
     id: 'qwen/qwen3.8-27b',
-    label: 'qwen/qwen3.8-27b (Groq Multilingual & Asian Scripts)',
+    label: 'Multilingual & Indic Script Engine (27B)',
   },
   {
     id: 'openai/gpt-oss-20b',
-    label: 'openai/gpt-oss-20b (Groq Ultra-Low Latency)',
+    label: 'Ultra-Fast Proofreader & Translator (20B)',
   },
   {
     id: 'allam-2-7b',
-    label: 'allam-2-7b (SDAIA Arabic & Multilingual)',
+    label: 'Arabic & Regional Script Engine (7B)',
   },
 ] as const;
 
@@ -96,7 +96,7 @@ export async function transcribeWithGroqClientOrServer(params: {
           modelUsed?: string;
         }>(res);
         if (!res.ok || data.error) {
-          throw new Error(data.error || 'Groq Whisper transcription failed.');
+          throw new Error(data.error || 'Audio transcription failed.');
         }
         return {
           cues: data.cues || [],
@@ -104,7 +104,7 @@ export async function transcribeWithGroqClientOrServer(params: {
         };
       }
     } catch (e) {
-      if (e instanceof Error && e.message.includes('Groq Whisper')) {
+      if (e instanceof Error && e.message.includes('transcription')) {
         throw e;
       }
     }
@@ -157,7 +157,7 @@ export async function transcribeWithGroqClientOrServer(params: {
       typeof whisperData.error === 'string'
         ? whisperData.error
         : whisperData.error?.message || `HTTP ${sttRes.status}`;
-    throw new Error(`Groq Whisper (${chosenWhisperModel}) error: ${errMsg}`);
+    throw new Error(`Audio transcription error: ${errMsg}`);
   }
 
   const rawWords = Array.isArray(whisperData.words) ? whisperData.words : [];
@@ -207,7 +207,7 @@ export async function translateWithGroqClientOrServer(params: {
           modelUsed?: string;
         }>(res);
         if (!res.ok || data.error) {
-          throw new Error(data.error || 'Groq translation failed.');
+          throw new Error(data.error || 'Subtitle translation failed.');
         }
         return {
           cues: data.cues || [],
@@ -215,7 +215,7 @@ export async function translateWithGroqClientOrServer(params: {
         };
       }
     } catch (e) {
-      if (e instanceof Error && e.message.includes('Groq translation')) {
+      if (e instanceof Error && e.message.includes('translation')) {
         throw e;
       }
     }
@@ -277,7 +277,7 @@ export async function translateWithGroqClientOrServer(params: {
         typeof data.error === 'string'
           ? data.error
           : data.error?.message || `HTTP ${groqRes.status}`;
-      throw new Error(`Groq translation (${llmModel}) error: ${errMsg}`);
+      throw new Error(`Subtitle translation error: ${errMsg}`);
     }
 
     const rawContent = data.choices?.[0]?.message?.content || '{"cues":[]}';

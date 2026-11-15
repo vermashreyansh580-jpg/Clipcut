@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
 
     if (!fileBlob) {
       return NextResponse.json(
-        { error: 'Missing audio or video data for Groq Whisper transcription.' },
+        { error: 'Missing audio or video data for transcription.' },
         { status: 400 }
       );
     }
@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
           ? whisperData.error
           : whisperData.error?.message || `HTTP ${sttRes.status}`;
       return NextResponse.json(
-        { error: `Groq Whisper (${chosenWhisperModel}) error: ${errMsg}` },
+        { error: `Audio transcription error: ${errMsg}` },
         { status: sttRes.ok ? 500 : sttRes.status }
       );
     }
@@ -205,7 +205,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (err: unknown) {
     const message =
-      err instanceof Error ? err.message : 'Groq transcription request failed.';
+      err instanceof Error ? err.message : 'Audio transcription request failed.';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
           ? data.error
           : data.error?.message || `HTTP ${groqRes.status}`;
       return NextResponse.json(
-        { error: `Groq translation (${llmModel}) error: ${errMsg}` },
+        { error: `Subtitle translation error: ${errMsg}` },
         { status: groqRes.ok ? 500 : groqRes.status }
       );
     }
@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (err: unknown) {
     const message =
-      err instanceof Error ? err.message : 'Groq subtitle translation failed.';
+      err instanceof Error ? err.message : 'Subtitle translation failed.';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

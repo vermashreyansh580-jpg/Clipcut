@@ -227,15 +227,15 @@ test('safeParseResponseJson gracefully handles HTML error pages without throwing
 
 import { DEFAULT_STYLE_PRESETS, getDemoShowcaseCues } from './subtitles';
 
-test('DEFAULT_STYLE_PRESETS provides 30 Captik.in, 3D Obstacle Weave, After Effects, and Viral styles + multi-language demo cues', () => {
+test('DEFAULT_STYLE_PRESETS provides 30 Creator, 3D Obstacle Weave, Kinetic, and Viral styles + multi-language demo cues', () => {
   const keys = Object.keys(DEFAULT_STYLE_PRESETS);
   assert.equal(keys.length, 30);
-  assert.equal(DEFAULT_STYLE_PRESETS['captik-obstacle-weave'].config.depthBehindSubject, true);
-  assert.equal(DEFAULT_STYLE_PRESETS['captik-obstacle-weave'].config.depthLayeringOrder, 'weave-active-front');
-  assert.equal(DEFAULT_STYLE_PRESETS['ae-behind-building'].config.depthBehindSubject, true);
-  assert.equal(DEFAULT_STYLE_PRESETS['ae-behind-building'].config.crossDirection, 'left-to-right');
-  assert.equal(DEFAULT_STYLE_PRESETS['ae-skyline-rise'].config.depthBehindSubject, true);
-  assert.equal(DEFAULT_STYLE_PRESETS['ae-skyline-rise'].config.depthLayeringOrder, 'split-lines');
+  assert.equal(DEFAULT_STYLE_PRESETS['creator-obstacle-weave'].config.depthBehindSubject, true);
+  assert.equal(DEFAULT_STYLE_PRESETS['creator-obstacle-weave'].config.depthLayeringOrder, 'weave-active-front');
+  assert.equal(DEFAULT_STYLE_PRESETS['kinetic-behind-building'].config.depthBehindSubject, true);
+  assert.equal(DEFAULT_STYLE_PRESETS['kinetic-behind-building'].config.crossDirection, 'left-to-right');
+  assert.equal(DEFAULT_STYLE_PRESETS['kinetic-skyline-rise'].config.depthBehindSubject, true);
+  assert.equal(DEFAULT_STYLE_PRESETS['kinetic-skyline-rise'].config.depthLayeringOrder, 'split-lines');
 
   const hindiCues = getDemoShowcaseCues('Hindi');
   assert.equal(hindiCues.length, 4);

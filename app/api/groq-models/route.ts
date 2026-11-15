@@ -28,7 +28,7 @@ export async function GET() {
           ? data.error
           : data.error?.message || `HTTP ${res.status}`;
       return NextResponse.json(
-        { error: `Groq models check failed: ${errMsg}` },
+        { error: `AI models check failed: ${errMsg}` },
         { status: res.ok ? 500 : res.status }
       );
     }
@@ -39,7 +39,7 @@ export async function GET() {
       .filter((m) => m.active !== false)
       .map((m) => ({
         id: m.id,
-        ownedBy: m.owned_by || 'Groq',
+        ownedBy: m.owned_by || 'CapTanz',
         active: m.active ?? true,
         category: m.id.includes('whisper')
           ? 'stt'
@@ -57,7 +57,7 @@ export async function GET() {
     });
   } catch (err: unknown) {
     const message =
-      err instanceof Error ? err.message : 'Could not fetch live Groq models.';
+      err instanceof Error ? err.message : 'Could not fetch live AI models.';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
