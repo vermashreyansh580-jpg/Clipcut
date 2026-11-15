@@ -20,6 +20,8 @@ import {
   formatSrtTime,
   sliderValueToYPosition,
   yPositionToSliderValue,
+  DEMO_SHOWCASE_DURATION,
+  getDemoShowcaseCues,
 } from '@/lib/subtitles';
 import CaptionCanvasPlayer from './CaptionCanvasPlayer';
 import FreeToolsHub, { ToolId } from './FreeToolsHub';
@@ -81,7 +83,7 @@ const STUDIO_LANGUAGES = [
 const FAQ_ITEMS = [
   {
     q: 'Are exported videos really free of watermarks?',
-    a: 'Yes. Every video rendered in CaptionX Free Studio is 100% free of watermarks, logos, or corner branding. Both your burned-in video export (.webm / .mp4) and your subtitle files (.srt, .vtt, .ass, .sbv, .txt, .json) download cleanly.',
+    a: 'Yes. Every video rendered in CapTanz Free Studio is 100% free of watermarks, logos, or corner branding. Both your burned-in video export (.webm / .mp4) and your subtitle files (.srt, .vtt, .ass, .sbv, .txt, .json) download cleanly.',
   },
   {
     q: 'Does it support Hinglish and Indian regional languages?',
@@ -110,18 +112,21 @@ export default function CaptionStudioApp() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
 
-  // Subtitle cues state (starts empty until user uploads media, imports SRT, or adds cues — no fake pre-populated reviews/data)
-  const [cues, setCues] = useState<CaptionCue[]>([]);
-  const [currentTime, setCurrentTime] = useState<number>(0);
-  const [duration, setDuration] = useState<number>(12);
+  // Pre-loaded built-in CapTanz Showcase Video cues so users can immediately pick any language and test how subtitles & 3D Obstacle Weave look
+  const [isShowcaseDemoActive, setIsShowcaseDemoActive] = useState<boolean>(true);
+  const [cues, setCues] = useState<CaptionCue[]>(() =>
+    getDemoShowcaseCues('hinglish')
+  );
+  const [currentTime, setCurrentTime] = useState<number>(0.4);
+  const [duration, setDuration] = useState<number>(DEMO_SHOWCASE_DURATION);
   const [aspectRatio, setAspectRatio] = useState<'9:16' | '16:9' | '1:1'>('9:16');
 
   // Style configuration state
   const [styleConfig, setStyleConfig] = useState<CaptionStyleConfig>(
-    DEFAULT_STYLE_PRESETS['ae-behind-building'].config
+    DEFAULT_STYLE_PRESETS['captik-obstacle-weave'].config
   );
   const [activeStudioTab, setActiveStudioTab] = useState<'transcript' | 'style' | 'export'>('transcript');
-  const [styleCategoryFilter, setStyleCategoryFilter] = useState<'all' | 'cinematic-depth' | 'after-effects' | 'viral'>('all');
+  const [styleCategoryFilter, setStyleCategoryFilter] = useState<'all' | 'captik-india' | 'cinematic-depth' | 'after-effects' | 'viral'>('all');
 
   // AI Transcription & Translation state (Groq Live Active Models)
   const [selectedLanguage, setSelectedLanguage] = useState<string>('hinglish');
@@ -188,10 +193,48 @@ export default function CaptionStudioApp() {
     );
   }, [langSearch]);
 
+  // Switch language on the built-in Showcase Demo Video or set target language for uploaded media
+  const handleSelectShowcaseLanguage = (langCode: string) => {
+    setSelectedLanguage(langCode);
+    if (isShowcaseDemoActive || !mediaFile) {
+      setIsShowcaseDemoActive(true);
+      const demoCues = regroupCuesByMaxWords(
+        getDemoShowcaseCues(langCode),
+        styleConfig.maxWordsPerLine
+      );
+      setCues(demoCues);
+      setDuration(DEMO_SHOWCASE_DURATION);
+      setCurrentTime(0.4);
+      setTranscribeStatus(
+        `CapTanz Showcase Video loaded in ${langCode === 'auto' ? 'Hinglish' : langCode} — press Play Preview or test any Captik / 3D Obstacle Weave style!`
+      );
+    }
+  };
+
+  const handleReloadShowcaseDemo = (langCode: string = selectedLanguage) => {
+    if (mediaUrl) URL.revokeObjectURL(mediaUrl);
+    setMediaFile(null);
+    setMediaUrl(null);
+    setMediaType(null);
+    setMediaFileName('CapTanz-3D-Obstacle-Showcase.mp4');
+    setIsShowcaseDemoActive(true);
+    const demoCues = regroupCuesByMaxWords(
+      getDemoShowcaseCues(langCode),
+      styleConfig.maxWordsPerLine
+    );
+    setCues(demoCues);
+    setDuration(DEMO_SHOWCASE_DURATION);
+    setCurrentTime(0.4);
+    setTranscribeStatus(
+      `Loaded built-in CapTanz Showcase Video (${langCode === 'auto' ? 'Hinglish' : langCode}).`
+    );
+  };
+
   // Handle uploading video, audio, or subtitle file
   const handleSelectFile = async (file: File) => {
     setTranscribeError(null);
     setTranscribeStatus(null);
+    setIsShowcaseDemoActive(false);
 
     const lower = file.name.toLowerCase();
     if (
@@ -521,7 +564,7 @@ export default function CaptionStudioApp() {
           href="#top"
           className="text-xl font-black tracking-tight text-slate-950 whitespace-nowrap shrink-0"
         >
-          CAPTION <span className="text-blue-600">X</span>
+          CAP<span className="text-blue-600">TANZ</span>
         </a>
 
         {/* Zone 2: 4 concise single-line text navigation links */}
@@ -533,7 +576,7 @@ export default function CaptionStudioApp() {
             href="#studio-workspace"
             className="hover:text-slate-950 hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0"
           >
-            Caption Studio
+            CapTanz Studio
           </a>
           <a
             href="#free-tools"
@@ -561,24 +604,24 @@ export default function CaptionStudioApp() {
             href="#studio-workspace"
             className="px-4 py-2 text-xs font-bold text-white bg-blue-600 rounded-full hover:bg-blue-700 transition-colors whitespace-nowrap shrink-0"
           >
-            Open Free Studio
+            Open CapTanz Studio
           </a>
         </div>
       </header>
 
       <main id="top" className="flex-1">
-        {/* HERO + AUTO CAPTION UPLOAD SECTION (Inspired by caption-x.com & caption-x.com/studio, 100% Free & No Watermark, Zero Fake Data) */}
+        {/* HERO + AUTO CAPTION UPLOAD SECTION */}
         <section className="relative overflow-hidden bg-gradient-to-b from-sky-50/70 via-white to-white pt-12 pb-16 px-4 sm:px-6 lg:px-8 border-b border-slate-100">
           <div className="max-w-6xl mx-auto space-y-10">
             <div className="text-center max-w-3xl mx-auto space-y-4">
               <p className="text-xs font-semibold text-blue-600 tracking-wide">
-                100% Free Browser Studio · Zero Watermark on Video & SRT Exports · Hinglish & 100+ Languages
+                CapTanz 3D Studio · Captik.in & After Effects Styles · 3D Obstacle Weave · Zero Watermark
               </p>
               <h1
                 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-slate-950 leading-[1.08]"
                 style={{ textWrap: 'balance' }}
               >
-                Automatic Captions for{' '}
+                CapTanz Viral Captions for{' '}
                 <span
                   className="text-teal-600 font-semibold italic"
                   style={{ fontFamily: 'var(--font-fraunces), serif' }}
@@ -587,17 +630,20 @@ export default function CaptionStudioApp() {
                 </span>
               </h1>
               <p className="text-base sm:text-lg text-slate-600 leading-relaxed max-w-2xl mx-auto">
-                Upload a video or audio clip, auto-generate word-timed captions
-                with AI, customize animated styles, and export a captioned
-                video right in your browser — completely free and with{' '}
+                Test our built-in multi-language showcase video right now or upload
+                your own clip — featuring{' '}
                 <strong className="font-semibold text-slate-900">
-                  no watermark
+                  Captik.in viral styles
                 </strong>
-                .
+                ,{' '}
+                <strong className="font-semibold text-slate-900">
+                  3D Obstacle Weave (Kuch Piche · Kuch Aage)
+                </strong>
+                , and 100% watermark-free exports.
               </p>
             </div>
 
-            {/* CaptionX Studio Upload Box */}
+            {/* CapTanz Studio Upload Box */}
             <div className="max-w-3xl mx-auto">
               <div className="rounded-3xl border-2 border-dashed border-blue-200 bg-blue-50/40 p-8 sm:p-10 text-center space-y-6 transition-colors hover:border-blue-400">
                 <div className="w-14 h-14 rounded-2xl bg-blue-100/80 border border-blue-200 flex items-center justify-center mx-auto text-blue-600">
@@ -728,10 +774,10 @@ export default function CaptionStudioApp() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-5">
             <div>
               <p className="text-xs font-bold uppercase tracking-wider text-blue-600">
-                Interactive Browser Studio
+                CapTanz Interactive Browser Studio
               </p>
               <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-950">
-                Caption Studio & Watermark-Free Exporter
+                CapTanz Studio — Captik Styles & 3D Obstacle Weave
               </h2>
             </div>
 
@@ -746,6 +792,65 @@ export default function CaptionStudioApp() {
               <span className="text-emerald-700 font-sans font-semibold">
                 Watermark: Disabled (Free)
               </span>
+            </div>
+          </div>
+
+          {/* PRE-LOADED MULTI-LANGUAGE SHOWCASE VIDEO BAR: Let user pick any language & check subtitles live */}
+          <div className="p-4 rounded-2xl bg-slate-900 text-white border border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 text-[10px] font-black uppercase tracking-wider">
+                  PRE-LOADED DEMO VIDEO
+                </span>
+                <span className="text-xs font-extrabold text-white">
+                  अपनी मनपसंद भाषा चुनें और लाइव सबटाइटल्स चेक करें (Test Subtitles & 3D Obstacle Weave)
+                </span>
+              </div>
+              <p className="text-xs text-slate-300">
+                नीचे किसी भी भाषा पर क्लिक करें — प्री-लोडेड वीडियो के सबटाइटल्स तुरंत उस भाषा में बदल जाएंगे और आप देख सकते हैं कि कौनसा स्टाइल कैसा दिखता है:
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              {[
+                { code: 'hinglish', label: 'Hinglish' },
+                { code: 'Hindi', label: 'हिन्दी (Hindi)' },
+                { code: 'English', label: 'English' },
+                { code: 'Punjabi', label: 'ਪੰਜਾਬੀ' },
+                { code: 'Marathi', label: 'मराठी' },
+                { code: 'Tamil', label: 'தமிழ்' },
+                { code: 'Telugu', label: 'తెలుగు' },
+                { code: 'Bengali', label: 'বাংলা' },
+                { code: 'Gujarati', label: 'ગુજરાતી' },
+                { code: 'Urdu', label: 'اردو' },
+                { code: 'Spanish', label: 'Español' },
+                { code: 'Arabic', label: 'العربية' },
+              ].map((lang) => {
+                const active = selectedLanguage === lang.code && isShowcaseDemoActive;
+                return (
+                  <button
+                    key={lang.code}
+                    type="button"
+                    onClick={() => handleSelectShowcaseLanguage(lang.code)}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      active
+                        ? 'bg-cyan-400 text-slate-950 shadow-sm'
+                        : 'bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700'
+                    }`}
+                  >
+                    {lang.label}
+                  </button>
+                );
+              })}
+              {!isShowcaseDemoActive && (
+                <button
+                  type="button"
+                  onClick={() => handleReloadShowcaseDemo(selectedLanguage)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+                >
+                  Reload Demo Video
+                </button>
+              )}
             </div>
           </div>
 
@@ -840,12 +945,12 @@ export default function CaptionStudioApp() {
                       htmlFor="studio-language-select"
                       className="block text-[11px] font-semibold text-slate-600 mb-1"
                     >
-                      Spoken or Target Language
+                      Spoken or Target Language (चुनते ही डेमो सबटाइटल्स बदलें)
                     </label>
                     <select
                       id="studio-language-select"
                       value={selectedLanguage}
-                      onChange={(e) => setSelectedLanguage(e.target.value)}
+                      onChange={(e) => handleSelectShowcaseLanguage(e.target.value)}
                       className="w-full px-3 py-2 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg"
                     >
                       {STUDIO_LANGUAGES.map((lang) => (
@@ -1139,7 +1244,7 @@ export default function CaptionStudioApp() {
                         : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
-                    AE & 3D Styles (20)
+                    Captik & AE Styles (30)
                   </button>
                   <button
                     type="button"
@@ -1156,18 +1261,18 @@ export default function CaptionStudioApp() {
 
                 {activeStudioTab !== 'export' ? (
                   <div className="space-y-3.5">
-                    {/* Dedicated Cinematic Behind-Building / Subject Crossing Feature Card */}
+                    {/* Dedicated Viral YouTuber 3D Obstacle Weave (Kuch Piche, Kuch Aage) Card */}
                     <div className="p-3 rounded-xl bg-slate-900 text-white border border-slate-800 space-y-2.5">
                       <div className="flex items-center justify-between gap-2">
                         <div>
                           <span className="inline-block px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 text-[10px] font-black uppercase tracking-wider mb-0.5">
-                            CINEMATIC DEPTH FX
+                            VIRAL YOUTUBER 3D WEAVE
                           </span>
                           <p className="text-xs font-extrabold text-white">
-                            Behind Building / Subject Cross
+                            Obstacle Weave (Kuch Piche · Kuch Aage)
                           </p>
                           <p className="text-[11px] text-slate-300 leading-tight">
-                            बिल्डिंग या सब्जेक्ट के पीछे से सिनेमैटिक फॉन्ट्स क्रॉस कराएं
+                            कुछ टेक्स्ट ऑब्स्टेकल्स (बिल्डिंग/इंसान) के पीछे से और मुख्य शब्द आगे से क्रॉस करेगा
                           </p>
                         </div>
                         <button
@@ -1176,13 +1281,15 @@ export default function CaptionStudioApp() {
                             setStyleConfig((s) => ({
                               ...s,
                               depthBehindSubject: !s.depthBehindSubject,
+                              depthLayeringOrder:
+                                s.depthLayeringOrder || 'weave-active-front',
                               crossDirection:
                                 !s.depthBehindSubject && s.crossDirection === 'none'
                                   ? 'left-to-right'
                                   : s.crossDirection,
                               fontSize:
                                 !s.depthBehindSubject && s.fontSize < 74
-                                  ? 88
+                                  ? 84
                                   : s.fontSize,
                             }))
                           }
@@ -1196,8 +1303,46 @@ export default function CaptionStudioApp() {
                         </button>
                       </div>
 
+                      {/* Obstacle Weave Layering Mode Selector */}
+                      <div className="pt-1 border-t border-slate-800">
+                        <label
+                          htmlFor="depth-layering-order-select"
+                          className="block text-[10px] font-bold text-cyan-300 mb-1"
+                        >
+                          Obstacle Depth Mode (कौनसा शब्द पीछे · कौनसा आगे)
+                        </label>
+                        <select
+                          id="depth-layering-order-select"
+                          value={
+                            styleConfig.depthLayeringOrder || 'weave-active-front'
+                          }
+                          onChange={(e) =>
+                            setStyleConfig((s) => ({
+                              ...s,
+                              depthBehindSubject: true,
+                              depthLayeringOrder:
+                                e.target.value as CaptionStyleConfig['depthLayeringOrder'],
+                            }))
+                          }
+                          className="w-full px-2.5 py-1.5 text-[11px] font-bold bg-slate-800 text-white border border-slate-700 rounded-lg"
+                        >
+                          <option value="weave-active-front">
+                            Viral YouTuber: Setup Words पीछे · Active Word आगे
+                          </option>
+                          <option value="alternate-words">
+                            Zig-Zag Weave: Word 1 पीछे · Word 2 आगे · Word 3 पीछे
+                          </option>
+                          <option value="split-lines">
+                            2-Line Split: ऊपर वाली लाइन पीछे · नीचे वाली लाइन आगे
+                          </option>
+                          <option value="all-behind">
+                            Full Monument: सारे शब्द ऑब्स्टेकल के पीछे
+                          </option>
+                        </select>
+                      </div>
+
                       {/* Crossing Direction & Building Matting Controls */}
-                      <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800">
+                      <div className="grid grid-cols-2 gap-2 pt-1">
                         <div>
                           <label
                             htmlFor="cross-direction-select"
@@ -1218,7 +1363,7 @@ export default function CaptionStudioApp() {
                             className="w-full px-2 py-1.5 text-[11px] font-bold bg-slate-800 text-white border border-slate-700 rounded-lg"
                           >
                             <option value="left-to-right">
-                              Left → Right Cross (बिल्डिंग पार)
+                              Left → Right Cross (पार करना)
                             </option>
                             <option value="right-to-left">
                               Right → Left Cross (दाएं से बाएं)
@@ -1238,7 +1383,7 @@ export default function CaptionStudioApp() {
                             htmlFor="depth-mode-select"
                             className="block text-[10px] font-bold text-slate-300 mb-1"
                           >
-                            Foreground Cutout Mode
+                            Obstacle Cutout Type
                           </label>
                           <select
                             id="depth-mode-select"
@@ -1254,13 +1399,13 @@ export default function CaptionStudioApp() {
                             className="w-full px-2 py-1.5 text-[11px] font-bold bg-slate-800 text-white border border-slate-700 rounded-lg"
                           >
                             <option value="auto-building-sky">
-                              Auto Building / Sky
-                            </option>
-                            <option value="dark-silhouette">
-                              Dark Building / Silhouette
+                              Auto Obstacles / Building
                             </option>
                             <option value="center-portrait">
-                              Center Person / Tower
+                              YouTuber / Person in Center
+                            </option>
+                            <option value="dark-silhouette">
+                              Dark Pillar / Silhouette
                             </option>
                             <option value="bright-subject">
                               Lit Subject / Night
@@ -1273,10 +1418,10 @@ export default function CaptionStudioApp() {
                         <div className="space-y-2 pt-1">
                           <div className="flex items-center justify-between text-[10px] font-semibold text-slate-300">
                             <label htmlFor="depth-threshold-slider">
-                              Building Mask Sensitivity
+                              Obstacle Mask Sensitivity
                             </label>
                             <span className="font-mono text-cyan-300">
-                              {styleConfig.depthThreshold ?? 55}%
+                              {styleConfig.depthThreshold ?? 50}%
                             </span>
                           </div>
                           <input
@@ -1284,7 +1429,7 @@ export default function CaptionStudioApp() {
                             type="range"
                             min={15}
                             max={90}
-                            value={styleConfig.depthThreshold ?? 55}
+                            value={styleConfig.depthThreshold ?? 50}
                             onChange={(e) =>
                               setStyleConfig((s) => ({
                                 ...s,
@@ -1294,13 +1439,13 @@ export default function CaptionStudioApp() {
                             className="w-full accent-cyan-400 h-1.5"
                           />
                           <div className="flex items-center justify-between text-[10px] font-semibold text-slate-300">
-                            <span>X-Ray Ghost Rim Through Building</span>
+                            <span>X-Ray Ghost Rim on Behind Words</span>
                             <button
                               type="button"
                               onClick={() =>
                                 setStyleConfig((s) => ({
                                   ...s,
-                                  depthXrayOutline: s.depthXrayOutline ? 0 : 0.28,
+                                  depthXrayOutline: s.depthXrayOutline ? 0 : 22,
                                 }))
                               }
                               className={`px-2 py-0.5 rounded text-[10px] font-bold ${
@@ -1316,20 +1461,21 @@ export default function CaptionStudioApp() {
                       )}
                     </div>
 
-                    {/* Category Filter Pills for 20 After Effects & Viral Presets */}
+                    {/* Category Filter Pills for 30 Captik.in, After Effects & Viral Presets */}
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                          After Effects & 3D Presets
+                          Captik.in, 3D & After Effects Styles
                         </p>
                         <span className="text-[11px] font-mono font-bold text-blue-600">
-                          20 Varieties
+                          30 Styles
                         </span>
                       </div>
-                      <div className="grid grid-cols-4 gap-1 bg-slate-200/70 p-1 rounded-lg">
+                      <div className="grid grid-cols-5 gap-1 bg-slate-200/70 p-1 rounded-lg">
                         {[
-                          { id: 'all', label: 'All (20)' },
-                          { id: 'cinematic-depth', label: '3D Depth' },
+                          { id: 'all', label: 'All (30)' },
+                          { id: 'captik-india', label: 'Captik (10)' },
+                          { id: 'cinematic-depth', label: '3D Weave' },
                           { id: 'after-effects', label: 'AE FX (12)' },
                           { id: 'viral', label: 'Viral (6)' },
                         ].map((cat) => (
@@ -1353,7 +1499,7 @@ export default function CaptionStudioApp() {
                       </div>
                     </div>
 
-                    {/* Scrollable 20 Preset Cards */}
+                    {/* Scrollable 30 Preset Cards */}
                     <div className="grid grid-cols-1 gap-2 max-h-[340px] overflow-y-auto pr-1">
                       {(
                         Object.keys(
@@ -1407,7 +1553,7 @@ export default function CaptionStudioApp() {
                                 }}
                                 className="px-2.5 py-1 rounded-md text-[11px] font-black tracking-tight shrink-0"
                               >
-                                AE FX
+                                {item.category === 'captik-india' ? 'CAPTIK' : 'AE FX'}
                               </span>
                             </button>
                           );
@@ -1535,7 +1681,7 @@ export default function CaptionStudioApp() {
                         htmlFor="style-animation-engine"
                         className="block text-xs font-bold text-slate-700 mb-1"
                       >
-                        After Effects Motion Engine
+                        Captik & After Effects Motion Engine
                       </label>
                       <select
                         id="style-animation-engine"
@@ -1550,7 +1696,16 @@ export default function CaptionStudioApp() {
                         className="w-full px-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-lg"
                       >
                         <option value="cinematic-pan">
-                          Cinematic Tracking Pan (Behind Building)
+                          Cinematic Tracking Pan (Obstacle Weave)
+                        </option>
+                        <option value="laser-strike">
+                          Captik Laser Glow Strike
+                        </option>
+                        <option value="sticker-tilt">
+                          Captik Sticker Cutout Tilt
+                        </option>
+                        <option value="marker-swipe">
+                          Captik Marker Highlighter Swipe
                         </option>
                         <option value="pop">Hormozi Elastic Pop</option>
                         <option value="whip-slide">
@@ -2034,14 +2189,14 @@ export default function CaptionStudioApp() {
                   <button
                     type="button"
                     onClick={() => {
-                      setSelectedLanguage(lang.code);
+                      handleSelectShowcaseLanguage(lang.code);
                       document
                         .getElementById('studio-workspace')
                         ?.scrollIntoView({ behavior: 'smooth' });
                     }}
                     className="w-full py-2 px-3 rounded-xl bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-800 text-xs font-bold transition-colors text-center whitespace-nowrap"
                   >
-                    Create {lang.name.split(' ')[0]} Captions →
+                    Test {lang.name.split(' ')[0]} Subtitles Live →
                   </button>
                 </div>
               ))}
@@ -2097,11 +2252,12 @@ export default function CaptionStudioApp() {
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
           <div className="space-y-1">
             <p className="text-lg font-black tracking-tight text-white">
-              CAPTION <span className="text-blue-500">X</span> FREE STUDIO
+              CAP<span className="text-blue-500">TANZ</span> FREE STUDIO
             </p>
             <p className="text-xs text-slate-400">
-              Real-time browser auto-captioning, animated subtitles, silence
-              remover, and format converters — 100% free with zero watermarks.
+              Real-time browser auto-captioning, Captik & After Effects styles,
+              3D Obstacle Weave, silence remover, and format converters — 100%
+              free with zero watermarks.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-6 text-xs font-semibold text-slate-300">

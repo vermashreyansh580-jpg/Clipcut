@@ -15,6 +15,16 @@ export interface CaptionCue {
 }
 
 export type CaptionStylePreset =
+  | 'captik-obstacle-weave'
+  | 'captik-laser-beam'
+  | 'captik-desi-hook'
+  | 'captik-sticker-scrap'
+  | 'captik-netflix-cinema'
+  | 'captik-bauhaus-block'
+  | 'captik-iman-glass'
+  | 'captik-dhruv-docu'
+  | 'captik-marker-swipe'
+  | 'captik-mrbeast-slam'
   | 'ae-behind-building'
   | 'ae-skyline-rise'
   | 'ae-neon-saber'
@@ -45,7 +55,10 @@ export type CaptionAnimationStyle =
   | 'glitch'
   | 'cinematic-pan'
   | 'karaoke'
-  | 'flicker';
+  | 'flicker'
+  | 'laser-strike'
+  | 'sticker-tilt'
+  | 'marker-swipe';
 
 export type CaptionCrossDirection =
   | 'none'
@@ -59,6 +72,12 @@ export type CaptionDepthMode =
   | 'dark-silhouette'
   | 'bright-subject'
   | 'center-portrait';
+
+export type CaptionDepthLayeringOrder =
+  | 'weave-active-front'
+  | 'alternate-words'
+  | 'split-lines'
+  | 'all-behind';
 
 export type CaptionFontFamily =
   | 'Plus Jakarta Sans'
@@ -87,7 +106,7 @@ export interface CaptionStyleConfig {
   uppercase: boolean;
   maxWordsPerLine: number;
   animationIntensity: 'subtle' | 'medium' | 'dynamic';
-  // After Effects Motion & Visual FX
+  // After Effects & Captik Motion & Visual FX
   animationStyle?: CaptionAnimationStyle;
   glowColor?: string;
   glowBlur?: number; // 0 to 40
@@ -96,11 +115,12 @@ export interface CaptionStyleConfig {
   gradientEndColor?: string;
   letterSpacing?: number; // 0 to 16px
   hollowInactive?: boolean;
-  // Cinematic Behind-Building / Subject Depth Layer & Parallax Crossing
+  // Cinematic Obstacle Sandwich Layering (Some Words Behind Obstacle, Some Words In Front)
   depthBehindSubject?: boolean;
   depthMode?: CaptionDepthMode;
+  depthLayeringOrder?: CaptionDepthLayeringOrder;
   depthThreshold?: number; // 10 to 90
-  depthXrayOutline?: number; // 0 to 60 (% ghost rim opacity on building)
+  depthXrayOutline?: number; // 0 to 60 (% ghost rim opacity on obstacle)
   crossDirection?: CaptionCrossDirection;
   crossSpeed?: number; // 10 to 100
 }
@@ -120,14 +140,301 @@ export const DEFAULT_STYLE_PRESETS: Record<
   {
     name: string;
     tagline: string;
-    category: 'cinematic-depth' | 'after-effects' | 'viral';
+    category: 'captik-india' | 'cinematic-depth' | 'after-effects' | 'viral';
     badge: string;
     config: CaptionStyleConfig;
   }
 > = {
+  'captik-obstacle-weave': {
+    name: 'Captik 3D Obstacle Weave (Kuch Piche · Kuch Aage)',
+    tagline: 'Setup words pass BEHIND buildings/person while active punchwords pop IN FRONT',
+    category: 'captik-india',
+    badge: '3D WEAVE',
+    config: {
+      preset: 'captik-obstacle-weave',
+      fontFamily: 'Bebas Neue',
+      fontSize: 84,
+      xPosition: 50,
+      yPosition: 45,
+      textColor: '#FFFFFF',
+      activeWordColor: '#FACC15',
+      activeBgColor: 'transparent',
+      boxBgColor: 'transparent',
+      strokeColor: '#000000',
+      strokeWidth: 5,
+      uppercase: true,
+      maxWordsPerLine: 3,
+      animationIntensity: 'dynamic',
+      animationStyle: 'cinematic-pan',
+      glowColor: '#FACC15',
+      glowBlur: 20,
+      extrudeDepth: 6,
+      extrudeColor: '#0F172A',
+      letterSpacing: 5,
+      depthBehindSubject: true,
+      depthMode: 'auto-building-sky',
+      depthLayeringOrder: 'weave-active-front',
+      depthThreshold: 50,
+      depthXrayOutline: 20,
+      crossDirection: 'left-to-right',
+      crossSpeed: 55,
+    },
+  },
+  'captik-laser-beam': {
+    name: 'Captik Laser Glow Strike',
+    tagline: 'Captik.in signature neon laser beam bar & electric word pulse',
+    category: 'captik-india',
+    badge: 'CAPTIK LASER',
+    config: {
+      preset: 'captik-laser-beam',
+      fontFamily: 'Montserrat',
+      fontSize: 54,
+      xPosition: 50,
+      yPosition: 52,
+      textColor: '#F8FAFC',
+      activeWordColor: '#00F0FF',
+      activeBgColor: 'transparent',
+      boxBgColor: 'transparent',
+      strokeColor: '#090D16',
+      strokeWidth: 6,
+      uppercase: true,
+      maxWordsPerLine: 4,
+      animationIntensity: 'dynamic',
+      animationStyle: 'laser-strike',
+      glowColor: '#EC4899',
+      glowBlur: 26,
+      letterSpacing: 2,
+      depthBehindSubject: false,
+      crossDirection: 'none',
+    },
+  },
+  'captik-desi-hook': {
+    name: 'Captik Desi Viral Hook (2-Tone)',
+    tagline: 'Crisp white setup + tilted bright yellow-green punchword for Indian Reels',
+    category: 'captik-india',
+    badge: 'DESI HOOK',
+    config: {
+      preset: 'captik-desi-hook',
+      fontFamily: 'Anton',
+      fontSize: 62,
+      xPosition: 50,
+      yPosition: 52,
+      textColor: '#FFFFFF',
+      activeWordColor: '#A3E635',
+      activeBgColor: '#0F172A',
+      boxBgColor: 'transparent',
+      strokeColor: '#000000',
+      strokeWidth: 7,
+      uppercase: true,
+      maxWordsPerLine: 3,
+      animationIntensity: 'dynamic',
+      animationStyle: 'sticker-tilt',
+      extrudeDepth: 6,
+      extrudeColor: '#000000',
+      letterSpacing: 2,
+      depthBehindSubject: false,
+      crossDirection: 'none',
+    },
+  },
+  'captik-sticker-scrap': {
+    name: 'Captik Sticker Scrapbook',
+    tagline: 'Rotated paper-cutout sticker pill with bold white & black double border',
+    category: 'captik-india',
+    badge: 'STICKER',
+    config: {
+      preset: 'captik-sticker-scrap',
+      fontFamily: 'Plus Jakarta Sans',
+      fontSize: 50,
+      xPosition: 50,
+      yPosition: 52,
+      textColor: '#FFFFFF',
+      activeWordColor: '#0F172A',
+      activeBgColor: '#FDE047',
+      boxBgColor: 'transparent',
+      strokeColor: '#000000',
+      strokeWidth: 6,
+      uppercase: true,
+      maxWordsPerLine: 4,
+      animationIntensity: 'dynamic',
+      animationStyle: 'sticker-tilt',
+      extrudeDepth: 4,
+      extrudeColor: '#000000',
+      letterSpacing: 1,
+      depthBehindSubject: false,
+      crossDirection: 'none',
+    },
+  },
+  'captik-netflix-cinema': {
+    name: 'Captik Netflix Cinema Bar',
+    tagline: 'Classic cinema warm-yellow subtitle with subtle dark matte bar',
+    category: 'captik-india',
+    badge: 'NETFLIX',
+    config: {
+      preset: 'captik-netflix-cinema',
+      fontFamily: 'Oswald',
+      fontSize: 46,
+      xPosition: 50,
+      yPosition: 78,
+      textColor: '#FEF08A',
+      activeWordColor: '#FFFFFF',
+      activeBgColor: '#E11D48',
+      boxBgColor: 'rgba(9, 13, 22, 0.72)',
+      strokeColor: '#000000',
+      strokeWidth: 4,
+      uppercase: false,
+      maxWordsPerLine: 6,
+      animationIntensity: 'subtle',
+      animationStyle: 'pop',
+      letterSpacing: 1,
+      depthBehindSubject: false,
+      crossDirection: 'none',
+    },
+  },
+  'captik-bauhaus-block': {
+    name: 'Captik Bauhaus Color Block',
+    tagline: 'Geometric brutalist color-blocked tiles inspired by Captik Bauhaus',
+    category: 'captik-india',
+    badge: 'BAUHAUS',
+    config: {
+      preset: 'captik-bauhaus-block',
+      fontFamily: 'Montserrat',
+      fontSize: 52,
+      xPosition: 50,
+      yPosition: 52,
+      textColor: '#FFFFFF',
+      activeWordColor: '#FFFFFF',
+      activeBgColor: '#FF3366',
+      boxBgColor: '#0F172A',
+      strokeColor: '#000000',
+      strokeWidth: 4,
+      uppercase: true,
+      maxWordsPerLine: 3,
+      animationIntensity: 'dynamic',
+      animationStyle: 'whip-slide',
+      extrudeDepth: 5,
+      extrudeColor: '#FACC15',
+      letterSpacing: 2,
+      depthBehindSubject: false,
+      crossDirection: 'none',
+    },
+  },
+  'captik-iman-glass': {
+    name: 'YouTuber Luxury Depth (Iman Style)',
+    tagline: 'Editorial serif where setup words sit behind obstacle & key word glows in front',
+    category: 'captik-india',
+    badge: 'YOUTUBER 3D',
+    config: {
+      preset: 'captik-iman-glass',
+      fontFamily: 'Fraunces',
+      fontSize: 64,
+      xPosition: 50,
+      yPosition: 46,
+      textColor: '#E2E8F0',
+      activeWordColor: '#38BDF8',
+      activeBgColor: 'transparent',
+      boxBgColor: 'transparent',
+      strokeColor: '#000000',
+      strokeWidth: 4,
+      uppercase: false,
+      maxWordsPerLine: 3,
+      animationIntensity: 'medium',
+      animationStyle: 'cinematic-pan',
+      glowColor: '#38BDF8',
+      glowBlur: 22,
+      letterSpacing: 2,
+      depthBehindSubject: true,
+      depthMode: 'center-portrait',
+      depthLayeringOrder: 'weave-active-front',
+      depthThreshold: 48,
+      depthXrayOutline: 18,
+      crossDirection: 'slow-zoom',
+      crossSpeed: 45,
+    },
+  },
+  'captik-dhruv-docu': {
+    name: 'YouTuber Documentary Fact Bar',
+    tagline: 'High-retention yellow documentary highlight bar for explainers & facts',
+    category: 'captik-india',
+    badge: 'DOCU FACT',
+    config: {
+      preset: 'captik-dhruv-docu',
+      fontFamily: 'Plus Jakarta Sans',
+      fontSize: 48,
+      xPosition: 50,
+      yPosition: 72,
+      textColor: '#FFFFFF',
+      activeWordColor: '#090D16',
+      activeBgColor: '#FACC15',
+      boxBgColor: 'rgba(9, 13, 22, 0.88)',
+      strokeColor: '#000000',
+      strokeWidth: 2,
+      uppercase: true,
+      maxWordsPerLine: 5,
+      animationIntensity: 'medium',
+      animationStyle: 'marker-swipe',
+      letterSpacing: 1,
+      depthBehindSubject: false,
+      crossDirection: 'none',
+    },
+  },
+  'captik-marker-swipe': {
+    name: 'Captik Marker Highlighter Swipe',
+    tagline: 'Smooth pastel marker brush sweeps across each word as it is spoken',
+    category: 'captik-india',
+    badge: 'MARKER',
+    config: {
+      preset: 'captik-marker-swipe',
+      fontFamily: 'Plus Jakarta Sans',
+      fontSize: 50,
+      xPosition: 50,
+      yPosition: 54,
+      textColor: '#F8FAFC',
+      activeWordColor: '#FFFFFF',
+      activeBgColor: '#10B981',
+      boxBgColor: 'transparent',
+      strokeColor: '#000000',
+      strokeWidth: 5,
+      uppercase: false,
+      maxWordsPerLine: 4,
+      animationIntensity: 'medium',
+      animationStyle: 'marker-swipe',
+      letterSpacing: 1,
+      depthBehindSubject: false,
+      crossDirection: 'none',
+    },
+  },
+  'captik-mrbeast-slam': {
+    name: 'YouTuber Beast Impact Slam',
+    tagline: 'Heavy 10px black outline with explosive word slam & cyan-yellow pop',
+    category: 'captik-india',
+    badge: 'BEAST SLAM',
+    config: {
+      preset: 'captik-mrbeast-slam',
+      fontFamily: 'Anton',
+      fontSize: 64,
+      xPosition: 50,
+      yPosition: 52,
+      textColor: '#FFFFFF',
+      activeWordColor: '#FACC15',
+      gradientEndColor: '#F97316',
+      activeBgColor: 'transparent',
+      boxBgColor: 'transparent',
+      strokeColor: '#000000',
+      strokeWidth: 9,
+      uppercase: true,
+      maxWordsPerLine: 3,
+      animationIntensity: 'dynamic',
+      animationStyle: 'stomp',
+      extrudeDepth: 7,
+      extrudeColor: '#000000',
+      letterSpacing: 2,
+      depthBehindSubject: false,
+      crossDirection: 'none',
+    },
+  },
   'ae-behind-building': {
-    name: 'AE Behind Building (Cinematic Cross)',
-    tagline: 'Giant 3D title crosses horizontally behind buildings & subjects',
+    name: 'AE Behind Building (Obstacle Weave)',
+    tagline: 'Words weave behind & in front of buildings, pillars, and subjects',
     category: 'cinematic-depth',
     badge: 'BEHIND FX',
     config: {
@@ -153,6 +460,7 @@ export const DEFAULT_STYLE_PRESETS: Record<
       letterSpacing: 6,
       depthBehindSubject: true,
       depthMode: 'auto-building-sky',
+      depthLayeringOrder: 'weave-active-front',
       depthThreshold: 48,
       depthXrayOutline: 26,
       crossDirection: 'left-to-right',
@@ -160,10 +468,10 @@ export const DEFAULT_STYLE_PRESETS: Record<
     },
   },
   'ae-skyline-rise': {
-    name: 'AE Horizon Rise (Behind Subject)',
-    tagline: 'Monumental gold/amber title rises up from behind skyline & towers',
+    name: 'AE Horizon Split (Top Piche · Bottom Aage)',
+    tagline: 'Top setup line rises behind skyline while bottom punchline pops in front',
     category: 'cinematic-depth',
-    badge: 'DEPTH RISE',
+    badge: 'DEPTH SPLIT',
     config: {
       preset: 'ae-skyline-rise',
       fontFamily: 'Anton',
@@ -188,6 +496,7 @@ export const DEFAULT_STYLE_PRESETS: Record<
       letterSpacing: 4,
       depthBehindSubject: true,
       depthMode: 'auto-building-sky',
+      depthLayeringOrder: 'split-lines',
       depthThreshold: 48,
       depthXrayOutline: 24,
       crossDirection: 'rise-up',
@@ -678,6 +987,111 @@ export const DEFAULT_STYLE_PRESETS: Record<
     },
   },
 };
+
+export const DEMO_SHOWCASE_DURATION = 16;
+
+const DEMO_LANGUAGE_LINES: Record<string, [string, string, string, string]> = {
+  hinglish: [
+    'CapTanz studio mein aapka swagat hai',
+    'Kuch text obstacles ke piche se nikalta hai',
+    'Aur main punchword seedha aage pop karta hai',
+    'Apni pasand ki language aur Captik style chunein',
+  ],
+  Hindi: [
+    'CapTanz स्टूडियो में आपका स्वागत है',
+    'कुछ टेक्स्ट बिल्डिंग और ऑब्स्टेकल्स के पीछे चलता है',
+    'और मुख्य शब्द सीधा आपके सामने पॉप करता है',
+    'अपनी मनपसंद भाषा और Captik स्टाइल तुरंत चेक करें',
+  ],
+  English: [
+    'Welcome to CapTanz 3D Caption Studio',
+    'Watch words glide behind foreground obstacles',
+    'While hero punchwords pop right in front',
+    'Pick any language and test Captik styles live',
+  ],
+  Punjabi: [
+    'CapTanz ਸਟੂਡੀਓ ਵਿੱਚ ਤੁਹਾਡਾ ਸੁਆਗਤ ਹੈ',
+    'ਕੁਝ ਸ਼ਬਦ ਇਮਾਰਤਾਂ ਦੇ ਪਿੱਛੇ ਤੋਂ ਲੰਘਦੇ ਹਨ',
+    'ਅਤੇ ਮੁੱਖ ਸ਼ਬਦ ਸਿੱਧਾ ਅੱਗੇ ਉੱਭਰ ਕੇ ਆਉਂਦੇ ਹਨ',
+    'ਆਪਣੀ ਮਨਪਸੰਦ ਭਾਸ਼ਾ ਅਤੇ ਸਟਾਈਲ ਹੁਣੇ ਚੈੱਕ ਕਰੋ',
+  ],
+  Marathi: [
+    'CapTanz स्टुडिओमध्ये तुमचे स्वागत आहे',
+    'काही शब्द इमारतींच्या मागून जातात',
+    'आणि महत्त्वाचे शब्द थेट समोर पॉप होतात',
+    'तुमची आवडती भाषा आणि Captik स्टाईल निवडा',
+  ],
+  Tamil: [
+    'CapTanz ஸ்டுடியோவிற்கு நல்வரவு',
+    'சில வார்த்தைகள் கட்டிடங்களுக்குப் பின்னால் நகரும்',
+    'முக்கிய வார்த்தைகள் முன்னால் துடிப்புடன் தோன்றும்',
+    'உங்கள் மொழியைத் தேர்ந்தெடுத்து ஸ்டைலைச் சோதிக்கவும்',
+  ],
+  Telugu: [
+    'CapTanz స్టూడియోకి స్వాగతం',
+    'కొన్ని పదాలు భవనాల వెనుక నుండి వెళ్తాయి',
+    'ముఖ్యమైన పదాలు ముందుకు పాప్ అవుతాయి',
+    'మీకు నచ్చిన భాషలో సబ్‌టైటిల్స్ చెక్ చేయండి',
+  ],
+  Bengali: [
+    'CapTanz স্টুডিওতে আপনাকে স্বাগতম',
+    'কিছু শব্দ বিল্ডিংয়ের পেছন দিয়ে যাবে',
+    'আর মূল শব্দগুলো সামনে পপ করবে',
+    'আপনার পছন্দের ভাষা ও স্টাইল বেছে নিন',
+  ],
+  Gujarati: [
+    'CapTanz સ્ટુડિયોમાં તમારું સ્વાગત છે',
+    'કેટલાક શબ્દો બિલ્ડિંગની પાછળથી પસાર થાય છે',
+    'અને મુખ્ય શબ્દો સીધા આગળ પોપ થાય છે',
+    'તમારી પસંદગીની ભાષા અને સ્ટાઇલ ચેક કરો',
+  ],
+  Urdu: [
+    'CapTanz اسٹوڈیو میں خوش آمدید',
+    'کچھ الفاظ عمارتوں کے پیچھے سے گزرتے ہیں',
+    'اور خاص الفاظ سیدھا آگے نمایاں ہوتے ہیں',
+    'اپنی پسندیدہ زبان اور اسٹائل منتخب کریں',
+  ],
+  Spanish: [
+    'Bienvenido al estudio CapTanz 3D',
+    'Algunas palabras pasan detrás de los obstáculos',
+    'Y las palabras clave resaltan al frente',
+    'Elige tu idioma favorito y prueba los estilos',
+  ],
+  Arabic: [
+    'مرحباً بك في استوديو CapTanz ثلاثي الأبعاد',
+    'تمر بعض الكلمات خلف المباني والعوائق',
+    'وتبرز الكلمات الرئيسية في المقدمة بوضوح',
+    'اختر لغتك المفضلة وجرب جميع الأنماط فوراً',
+  ],
+};
+
+export function getDemoShowcaseCues(langCode: string): CaptionCue[] {
+  const normalized =
+    langCode === 'auto'
+      ? 'hinglish'
+      : DEMO_LANGUAGE_LINES[langCode]
+        ? langCode
+        : 'hinglish';
+  const lines = DEMO_LANGUAGE_LINES[normalized] || DEMO_LANGUAGE_LINES.hinglish;
+  const slots: Array<[number, number]> = [
+    [0.1, 3.8],
+    [4.0, 7.8],
+    [8.0, 11.8],
+    [12.0, 15.8],
+  ];
+
+  return lines.map((text, idx) => {
+    const [start, end] = slots[idx];
+    return {
+      id: `demo-cue-${normalized}-${idx + 1}`,
+      index: idx + 1,
+      start,
+      end,
+      text,
+      words: computeWordTimings(text, start, end),
+    };
+  });
+}
 
 export function pad2(n: number): string {
   return String(Math.floor(Math.max(0, n))).padStart(2, '0');

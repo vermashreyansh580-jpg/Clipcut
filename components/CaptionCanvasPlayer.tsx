@@ -92,50 +92,70 @@ export default function CaptionCanvasPlayer({
     return { width: 1280, height: 720 };
   }, [aspectRatio]);
 
-  // Draws foreground architectural building towers on preview canvas when no video is uploaded yet
-  const drawDemoForegroundBuilding = (
+  // Draws animated foreground architectural obstacles (skyscraper + bridge pillar + tower) for the built-in Showcase Video
+  const drawDemoForegroundObstacles = (
     ctx: CanvasRenderingContext2D,
     width: number,
-    height: number
+    height: number,
+    nowSec: number
   ) => {
     ctx.save();
-    // Main central glass skyscraper silhouette standing in front of the crossing text
-    const towerW = Math.round(width * 0.28);
-    const towerX = Math.round(width * 0.5 - towerW * 0.45);
-    const towerTop = Math.round(height * 0.22);
+    const parallaxX = Math.sin(nowSec * 0.7) * (width * 0.018);
+
+    // Obstacle 1: Left architectural suspension pillar / column
+    const leftW = Math.round(width * 0.15);
+    const leftX = Math.round(width * 0.12 - parallaxX * 0.7);
+    const leftTop = Math.round(height * 0.28);
+    const leftGrad = ctx.createLinearGradient(leftX, leftTop, leftX + leftW, height);
+    leftGrad.addColorStop(0, '#0F172A');
+    leftGrad.addColorStop(1, '#060A12');
+    ctx.fillStyle = leftGrad;
+    ctx.fillRect(leftX, leftTop, leftW, height - leftTop);
+    ctx.strokeStyle = 'rgba(244, 63, 94, 0.35)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(leftX, leftTop, leftW, height - leftTop);
+
+    // Obstacle 2: Main central glass skyscraper monument standing in the middle
+    const towerW = Math.round(width * 0.27);
+    const towerX = Math.round(width * 0.5 - towerW * 0.48 + parallaxX);
+    const towerTop = Math.round(height * 0.19);
     const towerH = height - towerTop;
 
     // Spire & stepped roof crown
     ctx.fillStyle = '#090E1A';
-    ctx.fillRect(towerX + towerW * 0.46, towerTop - height * 0.1, towerW * 0.08, height * 0.1);
-    ctx.fillRect(towerX + towerW * 0.18, towerTop - height * 0.035, towerW * 0.64, height * 0.035);
+    ctx.fillRect(towerX + towerW * 0.46, towerTop - height * 0.09, towerW * 0.08, height * 0.09);
+    ctx.fillRect(towerX + towerW * 0.18, towerTop - height * 0.032, towerW * 0.64, height * 0.032);
 
     // Main building body gradient
     const bGrad = ctx.createLinearGradient(towerX, towerTop, towerX + towerW, height);
-    bGrad.addColorStop(0, '#0F172A');
-    bGrad.addColorStop(0.5, '#090D16');
-    bGrad.addColorStop(1, '#04070D');
+    bGrad.addColorStop(0, '#111C33');
+    bGrad.addColorStop(0.5, '#0B1222');
+    bGrad.addColorStop(1, '#050811');
     ctx.fillStyle = bGrad;
     ctx.fillRect(towerX, towerTop, towerW, towerH);
 
-    // Architectural rim highlight on building edge
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
-    ctx.lineWidth = 2;
+    // Architectural cyan rim highlight on building edge
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.48)';
+    ctx.lineWidth = 2.5;
     ctx.strokeRect(towerX, towerTop, towerW, towerH);
 
-    // Subtle skyscraper window grid
-    ctx.fillStyle = 'rgba(186, 230, 253, 0.14)';
+    // Animated skyscraper window grid
     const cols = 5;
-    const rows = 16;
+    const rows = 15;
     const padX = towerW * 0.12;
     const cellW = (towerW - padX * 2) / cols;
     const cellH = (towerH * 0.85) / rows;
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         if ((r + c * 3) % 4 !== 0) {
+          const pulse = 0.12 + 0.08 * Math.sin(nowSec * 2 + r * 0.7 + c);
+          ctx.fillStyle =
+            (r + c) % 5 === 0
+              ? `rgba(250, 204, 21, ${pulse + 0.08})`
+              : `rgba(186, 230, 253, ${pulse})`;
           ctx.fillRect(
             towerX + padX + c * cellW + 3,
-            towerTop + 24 + r * cellH,
+            towerTop + 22 + r * cellH,
             cellW - 6,
             cellH - 8
           );
@@ -143,12 +163,15 @@ export default function CaptionCanvasPlayer({
       }
     }
 
-    // Secondary right-side tower silhouette
-    const sideW = Math.round(width * 0.18);
-    const sideX = Math.round(width * 0.74);
-    const sideTop = Math.round(height * 0.38);
-    ctx.fillStyle = '#070B14';
+    // Obstacle 3: Right-side tower silhouette
+    const sideW = Math.round(width * 0.17);
+    const sideX = Math.round(width * 0.75 + parallaxX * 0.5);
+    const sideTop = Math.round(height * 0.34);
+    ctx.fillStyle = '#070C18';
     ctx.fillRect(sideX, sideTop, sideW, height - sideTop);
+    ctx.strokeStyle = 'rgba(250, 204, 21, 0.28)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(sideX, sideTop, sideW, height - sideTop);
     ctx.restore();
   };
 
@@ -211,7 +234,6 @@ export default function CaptionCanvasPlayer({
     const bgLum = 0.299 * bgR + 0.587 * bgG + 0.114 * bgB;
 
     const thresholdSetting = style.depthThreshold ?? 48;
-    // Map threshold (10..90) to contrast cutoffs
     const cutoff = Math.max(12, Math.min(130, (100 - thresholdSetting) * 1.15));
     const feather = 22;
     const depthMode = style.depthMode || 'auto-building-sky';
@@ -235,17 +257,14 @@ export default function CaptionCanvasPlayer({
 
         let fgScore = 0;
         if (depthMode === 'dark-silhouette') {
-          // Dark building / tower / silhouette against brighter sky
           fgScore = Math.max(bgLum - lum, colorDist * 0.55);
         } else if (depthMode === 'bright-subject') {
-          // Illuminated subject / building against night sky
           fgScore = Math.max(lum - bgLum, colorDist * 0.65);
         } else if (depthMode === 'center-portrait') {
           const horizDist = Math.abs(x - pw * 0.5) / (pw * 0.5);
           const centerBoost = Math.max(0, 1 - horizDist * 0.85) * 28;
           fgScore = (colorDist * 0.75 + Math.abs(lum - bgLum) * 0.6) * relXCenterWeight + centerBoost;
         } else {
-          // 'auto-building-sky': automatically segments buildings/structures against sky or backdrop
           const lumDiff = bgLum > 115 ? bgLum - lum : Math.abs(lum - bgLum);
           fgScore = Math.max(lumDiff * 1.15, colorDist * 0.72);
         }
@@ -302,24 +321,37 @@ export default function CaptionCanvasPlayer({
 
         ctx.drawImage(vid, offsetX, offsetY, drawW, drawH);
       } else {
-        // Studio background (with skyline horizon when Behind-Building depth mode is previewed without a video)
+        // Built-in CapTanz Animated Showcase Video Scene (Skyline + Clouds + Light Trails)
         const grad = ctx.createLinearGradient(0, 0, 0, height);
-        if (style.depthBehindSubject) {
-          grad.addColorStop(0, '#0F172A');
-          grad.addColorStop(0.45, '#1E293B');
-          grad.addColorStop(1, '#090D16');
-        } else {
-          grad.addColorStop(0, '#0F172A');
-          grad.addColorStop(1, '#1E293B');
-        }
+        grad.addColorStop(0, '#070B19');
+        grad.addColorStop(0.38, '#13203B');
+        grad.addColorStop(0.72, '#1E1B4B');
+        grad.addColorStop(1, '#090D16');
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, width, height);
 
-        if (style.depthBehindSubject && mediaType !== 'audio') {
-          // Distant background skyline buildings (behind the text)
-          ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
-          ctx.fillRect(width * 0.08, height * 0.42, width * 0.16, height * 0.58);
-          ctx.fillRect(width * 0.27, height * 0.48, width * 0.14, height * 0.52);
+        // Animated horizon glow & distant skyline buildings (behind all text)
+        const sunGlow = ctx.createRadialGradient(
+          width * 0.5,
+          height * 0.42,
+          10,
+          width * 0.5,
+          height * 0.42,
+          width * 0.65
+        );
+        sunGlow.addColorStop(0, 'rgba(56, 189, 248, 0.22)');
+        sunGlow.addColorStop(0.5, 'rgba(244, 63, 94, 0.10)');
+        sunGlow.addColorStop(1, 'rgba(15, 23, 42, 0)');
+        ctx.fillStyle = sunGlow;
+        ctx.fillRect(0, 0, width, height);
+
+        if (mediaType !== 'audio') {
+          const bgShift = Math.sin(nowSec * 0.35) * (width * 0.01);
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.72)';
+          ctx.fillRect(width * 0.04 + bgShift, height * 0.44, width * 0.15, height * 0.56);
+          ctx.fillRect(width * 0.24 + bgShift, height * 0.38, width * 0.14, height * 0.62);
+          ctx.fillRect(width * 0.61 + bgShift, height * 0.41, width * 0.15, height * 0.59);
+          ctx.fillRect(width * 0.82 + bgShift, height * 0.46, width * 0.14, height * 0.54);
         }
 
         if (mediaType === 'audio') {
@@ -374,8 +406,8 @@ export default function CaptionCanvasPlayer({
             text: transcribingRef.current
               ? 'Generating AI Captions…'
               : style.depthBehindSubject
-                ? 'CINEMATIC BEHIND BUILDING'
-                : 'AFTER EFFECTS STUDIO',
+                ? 'KUCH PICHE KUCH AAGE'
+                : 'CAPTANZ 3D STUDIO',
             words: transcribingRef.current
               ? [
                   { word: 'Generating', start: 0, end: 2 },
@@ -384,13 +416,14 @@ export default function CaptionCanvasPlayer({
                 ]
               : style.depthBehindSubject
                 ? [
-                    { word: 'CINEMATIC', start: 0, end: 2 },
-                    { word: 'BEHIND', start: 2, end: 4 },
-                    { word: 'BUILDING', start: 4, end: 6 },
+                    { word: 'KUCH', start: 0, end: 1.5 },
+                    { word: 'PICHE', start: 1.5, end: 3 },
+                    { word: 'KUCH', start: 3, end: 4.5 },
+                    { word: 'AAGE', start: 4.5, end: 6 },
                   ]
                 : [
-                    { word: 'AFTER', start: 0, end: 2 },
-                    { word: 'EFFECTS', start: 2, end: 4 },
+                    { word: 'CAPTANZ', start: 0, end: 2 },
+                    { word: '3D', start: 2, end: 4 },
                     { word: 'STUDIO', start: 4, end: 6 },
                   ],
           };
@@ -398,7 +431,7 @@ export default function CaptionCanvasPlayer({
       }
       if (!activeCue) {
         if (!hasLiveVideo && style.depthBehindSubject && mediaType !== 'audio') {
-          drawDemoForegroundBuilding(ctx, width, height);
+          drawDemoForegroundObstacles(ctx, width, height, nowSec);
         }
         return;
       }
@@ -448,12 +481,18 @@ export default function CaptionCanvasPlayer({
         wordIndex: number;
       }
 
+      const anyWordDirectlyActive = words.some(
+        (w) => nowSec >= w.start - 0.04 && nowSec <= w.end + 0.04
+      );
+
       const measuredWords: MeasuredWord[] = words.map((w, wordIndex) => {
         const rawText = style.uppercase ? w.word.toUpperCase() : w.word;
         const isActive =
           activeCue.id === 'preview-guide'
-            ? wordIndex === 1
-            : nowSec >= w.start - 0.04 && nowSec <= w.end + 0.04;
+            ? wordIndex === Math.min(1, words.length - 1)
+            : anyWordDirectlyActive
+              ? nowSec >= w.start - 0.04 && nowSec <= w.end + 0.04
+              : wordIndex === Math.min(1, words.length - 1);
         const isPast =
           activeCue.id === 'preview-guide' ? wordIndex === 0 : nowSec > w.end;
         const wordDur = Math.max(0.05, w.end - w.start);
@@ -466,7 +505,6 @@ export default function CaptionCanvasPlayer({
                 ? 1
                 : 0;
 
-        // Typewriter character reveal if animationStyle === 'typewriter'
         let displayWord = rawText;
         if (style.animationStyle === 'typewriter' && activeCue.id !== 'preview-guide') {
           if (!isPast && !isActive) {
@@ -517,7 +555,7 @@ export default function CaptionCanvasPlayer({
       }
       if (currentLine.length > 0) lines.push(currentLine);
 
-      // Compute Cinematic Crossing / Parallax Offset (for crossing behind building/subject)
+      // Compute Cinematic Crossing / Parallax Offset (for crossing behind & in front of obstacles)
       const crossDir = style.crossDirection || 'none';
       const speedRatio = (style.crossSpeed ?? 55) / 100;
       let crossOffsetX = 0;
@@ -554,9 +592,9 @@ export default function CaptionCanvasPlayer({
         )
       );
 
-      // Step 2B: If Depth Behind Building / Subject is enabled on a real video, capture foreground mask BEFORE drawing text
-      const padBoundX = computedFontSize * 1.1;
-      const padBoundY = computedFontSize * 0.85;
+      // Capture foreground obstacle mask from live video BEFORE drawing text
+      const padBoundX = computedFontSize * 1.2;
+      const padBoundY = computedFontSize * 0.9;
       const patchX = anchorX - widestLine / 2 - padBoundX;
       const patchY = baseY - padBoundY;
       const patchW = widestLine + padBoundX * 2;
@@ -576,19 +614,17 @@ export default function CaptionCanvasPlayer({
         );
       }
 
-      // Apply global slow-zoom if enabled
-      if (crossScale !== 1) {
-        const blockCenterY = baseY + totalBlockHeight / 2;
-        ctx.translate(anchorX, blockCenterY);
-        ctx.scale(crossScale, crossScale);
-        ctx.translate(-anchorX, -blockCenterY);
-      }
-
-      // Draw Backdrop Box if configured
+      // Draw Backdrop Box if configured (always behind text)
       if (style.boxBgColor && style.boxBgColor !== 'transparent') {
         const padX = computedFontSize * 0.55;
         const padY = computedFontSize * 0.35;
         ctx.save();
+        if (crossScale !== 1) {
+          const blockCenterY = baseY + totalBlockHeight / 2;
+          ctx.translate(anchorX, blockCenterY);
+          ctx.scale(crossScale, crossScale);
+          ctx.translate(-anchorX, -blockCenterY);
+        }
         ctx.fillStyle = style.boxBgColor;
         ctx.beginPath();
         ctx.roundRect(
@@ -612,9 +648,49 @@ export default function CaptionCanvasPlayer({
       const extrudeColor = style.extrudeColor || '#0F172A';
       const glowBlur = Math.round((style.glowBlur || 0) * scaleFactor);
       const glowColor = style.glowColor || style.activeWordColor;
+      const depthOrder = style.depthLayeringOrder || 'weave-active-front';
 
-      // Helper to render text lines (either full fill/3D or X-Ray rim outline pass)
-      const renderCaptionLines = (xrayOutlineOnly: boolean) => {
+      // Determines whether a specific word renders IN FRONT OF obstacles (true) or BEHIND obstacles (false)
+      const isWordRenderedInFrontOfObstacle = (
+        mw: MeasuredWord,
+        lineIdx: number,
+        totalLinesCount: number
+      ): boolean => {
+        if (!style.depthBehindSubject) return true;
+        if (depthOrder === 'all-behind') return false;
+        if (depthOrder === 'alternate-words') {
+          // Odd words pop IN FRONT of obstacles, Even words pass BEHIND obstacles
+          return mw.wordIndex % 2 === 1;
+        }
+        if (depthOrder === 'split-lines') {
+          // Top line passes BEHIND obstacle, Bottom line pops IN FRONT of obstacle
+          if (totalLinesCount > 1) return lineIdx > 0;
+          return mw.isActive;
+        }
+        // Default 'weave-active-front' (Viral YouTuber Sandwich: Kuch Piche, Kuch Aage):
+        // Setup/inactive words glide BEHIND the obstacle, while the Active Spoken Word pops IN FRONT!
+        return mw.isActive;
+      };
+
+      // Helper to render text lines for a specific depth pass
+      const renderCaptionLines = (
+        passMode: 'all' | 'behind-only' | 'front-only' | 'xray-behind'
+      ) => {
+        ctx.save();
+        ctx.font = `${fontWeight} ${computedFontSize}px "${style.fontFamily}", sans-serif`;
+        ctx.textBaseline = 'middle';
+        if ('letterSpacing' in ctx) {
+          (
+            ctx as CanvasRenderingContext2D & { letterSpacing: string }
+          ).letterSpacing = `${trackingPx}px`;
+        }
+        if (crossScale !== 1) {
+          const blockCenterY = baseY + totalBlockHeight / 2;
+          ctx.translate(anchorX, blockCenterY);
+          ctx.scale(crossScale, crossScale);
+          ctx.translate(-anchorX, -blockCenterY);
+        }
+
         lines.forEach((line, lineIdx) => {
           const lineW = line.reduce(
             (acc, w, idx) => acc + w.width + (idx > 0 ? spaceWidth : 0),
@@ -629,14 +705,33 @@ export default function CaptionCanvasPlayer({
               return;
             }
 
+            const inFront = isWordRenderedInFrontOfObstacle(
+              mw,
+              lineIdx,
+              lines.length
+            );
+            if (passMode === 'behind-only' && inFront) {
+              cursorX += mw.width + spaceWidth;
+              return;
+            }
+            if (passMode === 'xray-behind' && inFront) {
+              cursorX += mw.width + spaceWidth;
+              return;
+            }
+            if (passMode === 'front-only' && !inFront) {
+              cursorX += mw.width + spaceWidth;
+              return;
+            }
+
             ctx.save();
             const wordCenterX = cursorX + mw.width / 2;
 
             let wordScale = 1;
             let wordOffsetY = 0;
             let wordOffsetX = 0;
+            let wordRotateRad = 0;
 
-            if (animStyle === 'pop') {
+            if (animStyle === 'pop' || animStyle === 'cinematic-pan') {
               if (mw.isActive) {
                 const popBoost =
                   style.animationIntensity === 'dynamic'
@@ -663,18 +758,24 @@ export default function CaptionCanvasPlayer({
                 (computedFontSize * 0.13);
             } else if (animStyle === 'glitch' && mw.isActive) {
               wordOffsetX = Math.sin(nowSec * 48) * 3 * scaleFactor;
+            } else if (animStyle === 'sticker-tilt' && mw.isActive) {
+              wordScale = 1.12;
+              wordRotateRad = ((mw.wordIndex % 2 === 0 ? -2.8 : 2.8) * Math.PI) / 180;
+            } else if (animStyle === 'laser-strike' && mw.isActive) {
+              wordScale = 1.1;
             }
 
             const drawY = centerY + wordOffsetY;
             const drawX = cursorX + wordOffsetX;
 
-            if (wordScale !== 1) {
+            if (wordScale !== 1 || wordRotateRad !== 0) {
               ctx.translate(wordCenterX, drawY);
-              ctx.scale(wordScale, wordScale);
+              if (wordRotateRad !== 0) ctx.rotate(wordRotateRad);
+              if (wordScale !== 1) ctx.scale(wordScale, wordScale);
               ctx.translate(-wordCenterX, -drawY);
             }
 
-            if (xrayOutlineOnly) {
+            if (passMode === 'xray-behind') {
               ctx.strokeStyle = style.activeWordColor || '#38BDF8';
               ctx.lineWidth = Math.max(1.5, 2 * scaleFactor);
               ctx.strokeText(mw.text, drawX, drawY);
@@ -683,7 +784,7 @@ export default function CaptionCanvasPlayer({
               return;
             }
 
-            // Active word pill background
+            // Active word pill background (supports Marker Swipe & Sticker double border)
             if (
               mw.isActive &&
               style.activeBgColor &&
@@ -691,16 +792,47 @@ export default function CaptionCanvasPlayer({
             ) {
               const pillPadX = computedFontSize * 0.24;
               const pillPadY = computedFontSize * 0.16;
+              const fullPillW = mw.width + pillPadX * 2;
+              const swipeProgress =
+                animStyle === 'marker-swipe'
+                  ? Math.min(1, 0.25 + mw.progress * 0.95)
+                  : 1;
+              const pillX = drawX - pillPadX;
+              const pillY = drawY - computedFontSize / 2 - pillPadY;
+              const pillW = fullPillW * swipeProgress;
+              const pillH = computedFontSize + pillPadY * 2;
+
+              ctx.save();
               ctx.fillStyle = style.activeBgColor;
               ctx.beginPath();
+              ctx.roundRect(pillX, pillY, pillW, pillH, 10);
+              ctx.fill();
+
+              if (animStyle === 'sticker-tilt') {
+                ctx.lineWidth = Math.max(2, 3 * scaleFactor);
+                ctx.strokeStyle = '#FFFFFF';
+                ctx.stroke();
+              }
+              ctx.restore();
+            }
+
+            // Captik Laser Beam Strike under active word
+            if (animStyle === 'laser-strike' && mw.isActive) {
+              ctx.save();
+              const beamY = drawY + computedFontSize * 0.48;
+              ctx.shadowColor = glowColor;
+              ctx.shadowBlur = 18 * scaleFactor;
+              ctx.fillStyle = style.activeWordColor;
+              ctx.beginPath();
               ctx.roundRect(
-                drawX - pillPadX,
-                drawY - computedFontSize / 2 - pillPadY,
-                mw.width + pillPadX * 2,
-                computedFontSize + pillPadY * 2,
-                10
+                drawX - 4,
+                beamY,
+                mw.width + 8,
+                Math.max(4, 6 * scaleFactor),
+                4
               );
               ctx.fill();
+              ctx.restore();
             }
 
             // After Effects RGB Chromatic Aberration Split on Glitch mode
@@ -789,14 +921,21 @@ export default function CaptionCanvasPlayer({
             cursorX += mw.width + spaceWidth;
           });
         });
+
+        ctx.restore();
       };
 
-      // Render Layer 2: Main Caption Layer
-      renderCaptionLines(false);
       ctx.restore();
 
-      // Render Layer 3: Foreground Building / Subject Occlusion Layer ON TOP of the captions!
-      if (style.depthBehindSubject) {
+      if (!style.depthBehindSubject) {
+        // Standard single-pass render when obstacle depth sandwich is off
+        renderCaptionLines('all');
+      } else {
+        // 4-PASS VIRAL YOUTUBER OBSTACLE SANDWICH ("Kuch Text Obstacles Ke Piche, Kuch Text Aage")
+        // Pass 2: Draw words that pass BEHIND the obstacles
+        renderCaptionLines('behind-only');
+
+        // Pass 3: Draw Foreground Obstacles (Buildings / Person / Pillars) ON TOP of Pass 2
         if (hasLiveVideo && fgMaskCanvas) {
           const safeX = Math.max(0, Math.floor(patchX));
           const safeY = Math.max(0, Math.floor(patchY));
@@ -817,30 +956,20 @@ export default function CaptionCanvasPlayer({
           );
           ctx.restore();
         } else if (!hasLiveVideo && mediaType !== 'audio') {
-          drawDemoForegroundBuilding(ctx, width, height);
+          drawDemoForegroundObstacles(ctx, width, height, nowSec);
         }
 
-        // Optional Layer 4: Subtle After Effects X-Ray Rim Outline visible through the building
-        const xrayOpacity = (style.depthXrayOutline ?? 24) / 100;
+        // Pass 3B: Optional subtle X-Ray Ghost Rim on the behind-obstacle words
+        const xrayOpacity = (style.depthXrayOutline ?? 20) / 100;
         if (xrayOpacity > 0.02) {
           ctx.save();
-          ctx.font = `${fontWeight} ${computedFontSize}px "${style.fontFamily}", sans-serif`;
-          ctx.textBaseline = 'middle';
-          if ('letterSpacing' in ctx) {
-            (
-              ctx as CanvasRenderingContext2D & { letterSpacing: string }
-            ).letterSpacing = `${trackingPx}px`;
-          }
-          if (crossScale !== 1) {
-            const blockCenterY = baseY + totalBlockHeight / 2;
-            ctx.translate(anchorX, blockCenterY);
-            ctx.scale(crossScale, crossScale);
-            ctx.translate(-anchorX, -blockCenterY);
-          }
           ctx.globalAlpha = xrayOpacity;
-          renderCaptionLines(true);
+          renderCaptionLines('xray-behind');
           ctx.restore();
         }
+
+        // Pass 4: Draw words that pop IN FRONT OF the obstacles ON TOP of Pass 3!
+        renderCaptionLines('front-only');
       }
     },
     [mediaType]
@@ -1187,7 +1316,7 @@ export default function CaptionCanvasPlayer({
         <div className="flex items-center gap-2 text-xs text-slate-300 font-medium truncate">
           <Film className="w-3.5 h-3.5 text-blue-400 shrink-0" />
           <span className="truncate">
-            {mediaFileName || 'After Effects & Cinematic Depth Canvas'}
+            {mediaFileName || 'CapTanz 3D Showcase Video (Multi-Language Demo)'}
           </span>
           <span aria-hidden="true" className="text-slate-600">
             ·
@@ -1198,12 +1327,14 @@ export default function CaptionCanvasPlayer({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          {/* Quick One-Click Toggle for Cinematic Text Behind Building / Subject */}
+          {/* Quick One-Click Toggle for Viral YouTuber Obstacle Weave (Kuch Piche, Kuch Aage) */}
           <button
             type="button"
             onClick={() =>
               onPositionChange?.({
                 depthBehindSubject: !styleConfig.depthBehindSubject,
+                depthLayeringOrder:
+                  styleConfig.depthLayeringOrder || 'weave-active-front',
                 crossDirection:
                   !styleConfig.depthBehindSubject &&
                   (!styleConfig.crossDirection || styleConfig.crossDirection === 'none')
@@ -1216,13 +1347,13 @@ export default function CaptionCanvasPlayer({
                 ? 'bg-sky-500/20 border-sky-400 text-sky-300'
                 : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
             }`}
-            title="Place captions behind buildings & subjects with cinematic crossing motion"
+            title="Weave captions behind & in front of obstacles (buildings/person) like viral YouTubers"
           >
             <Layers className="w-3.5 h-3.5" />
             <span>
               {styleConfig.depthBehindSubject
-                ? 'Behind Building: ON'
-                : 'Behind Building FX'}
+                ? 'Obstacle Weave (Piche+Aage): ON'
+                : 'Obstacle Weave FX'}
             </span>
           </button>
 

@@ -68,20 +68,20 @@ const oswald = Oswald({
 });
 
 export const metadata: Metadata = {
-  title: 'CaptionX Free Studio — Automatic Video Captions & Subtitles (No Watermark)',
+  title: 'CapTanz — Free AI Auto-Captions, Captik Styles & 3D Obstacle Depth Studio (No Watermark)',
   description:
-    'Free online automatic video caption generator, After Effects kinetic typography, cinematic behind-building depth titles, and watermark-free video/SRT exports.',
+    'CapTanz is a free online automatic video caption studio featuring Captik.in viral styles, After Effects kinetic typography, 3D obstacle weave (behind & in front of subjects), and watermark-free video/SRT exports.',
   openGraph: {
-    title: 'CaptionX Free Studio — Automatic Video Captions & Subtitles (No Watermark)',
+    title: 'CapTanz — Free AI Auto-Captions, Captik Styles & 3D Obstacle Depth Studio (No Watermark)',
     description:
-      'Free online automatic video caption generator, After Effects kinetic typography, cinematic behind-building depth titles, and watermark-free video/SRT exports.',
+      'CapTanz is a free online automatic video caption studio featuring Captik.in viral styles, After Effects kinetic typography, 3D obstacle weave (behind & in front of subjects), and watermark-free video/SRT exports.',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'CaptionX Free Studio — Automatic Video Captions & Subtitles (No Watermark)',
+    title: 'CapTanz — Free AI Auto-Captions, Captik Styles & 3D Obstacle Depth Studio (No Watermark)',
     description:
-      'Free online automatic video caption generator, After Effects kinetic typography, cinematic behind-building depth titles, and watermark-free video/SRT exports.',
+      'CapTanz is a free online automatic video caption generator, Captik.in viral styles, After Effects kinetic typography, and watermark-free exports.',
   },
 };
 

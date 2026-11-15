@@ -225,13 +225,25 @@ test('safeParseResponseJson gracefully handles HTML error pages without throwing
   assert.equal(parsedJson.count, 3);
 });
 
-import { DEFAULT_STYLE_PRESETS } from './subtitles';
+import { DEFAULT_STYLE_PRESETS, getDemoShowcaseCues } from './subtitles';
 
-test('DEFAULT_STYLE_PRESETS provides 20 After Effects, Behind-Building Depth, and Viral styles', () => {
+test('DEFAULT_STYLE_PRESETS provides 30 Captik.in, 3D Obstacle Weave, After Effects, and Viral styles + multi-language demo cues', () => {
   const keys = Object.keys(DEFAULT_STYLE_PRESETS);
-  assert.equal(keys.length, 20);
+  assert.equal(keys.length, 30);
+  assert.equal(DEFAULT_STYLE_PRESETS['captik-obstacle-weave'].config.depthBehindSubject, true);
+  assert.equal(DEFAULT_STYLE_PRESETS['captik-obstacle-weave'].config.depthLayeringOrder, 'weave-active-front');
   assert.equal(DEFAULT_STYLE_PRESETS['ae-behind-building'].config.depthBehindSubject, true);
   assert.equal(DEFAULT_STYLE_PRESETS['ae-behind-building'].config.crossDirection, 'left-to-right');
   assert.equal(DEFAULT_STYLE_PRESETS['ae-skyline-rise'].config.depthBehindSubject, true);
-  assert.equal(DEFAULT_STYLE_PRESETS['ae-skyline-rise'].config.crossDirection, 'rise-up');
+  assert.equal(DEFAULT_STYLE_PRESETS['ae-skyline-rise'].config.depthLayeringOrder, 'split-lines');
+
+  const hindiCues = getDemoShowcaseCues('Hindi');
+  assert.equal(hindiCues.length, 4);
+  assert.ok(hindiCues[0].text.includes('CapTanz'));
+  assert.ok(hindiCues[0].words.length >= 4);
+
+  const tamilCues = getDemoShowcaseCues('Tamil');
+  assert.equal(tamilCues.length, 4);
+  assert.ok(tamilCues[0].text.includes('CapTanz'));
 });
+
